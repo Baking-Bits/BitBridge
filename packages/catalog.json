@@ -1,0 +1,29 @@
+[
+  {
+    "id": "aura",
+    "name": "Aura - ESP32-2432S028R (CYD)",
+    "boardHint": "2.8in ILI9341 display board",
+    "docsUrl": "https://makerworld.com/en/models/1382304-aura-smart-weather-forecast-display",
+    "packagePath": "./packages/aura/",
+    "variants": [
+      {
+        "id": "stable",
+        "label": "Install Aura",
+        "notes": "Main release",
+        "manifest": "./packages/aura/manifest.json"
+      },
+      {
+        "id": "inverted",
+        "label": "Install Aura (Inverted Colors)",
+        "notes": "Use if colors are inverted",
+        "manifest": "./packages/aura/manifest-inverted.json"
+      },
+      {
+        "id": "ip-geo",
+        "label": "Install Aura + IP Geolocation",
+        "notes": "Adds 'Use My IP' button in location settings for automatic lat/lon detection",
+        "manifest": "./packages/aura/manifest-ip.json"
+      }
+    ]
+  }
+]

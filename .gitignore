@@ -1,0 +1,19 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# PlatformIO / build outputs
+.pio/
+**/.pio/
+*.elf
+*.map
+
+# Logs
+*.log

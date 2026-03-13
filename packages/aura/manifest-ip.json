@@ -1,0 +1,14 @@
+{
+  "name": "Aura (IP Geolocation)",
+  "builds": [
+    {
+      "chipFamily": "ESP32",
+      "parts": [
+        { "path": "aura-bootloader-ip.bin", "offset": 4096 },
+        { "path": "aura-partitions-ip.bin", "offset": 32768 },
+        { "path": "boot_app0.bin", "offset": 57344 },
+        { "path": "aura-firmware-ip.bin", "offset": 65536 }
+      ]
+    }
+  ]
+}

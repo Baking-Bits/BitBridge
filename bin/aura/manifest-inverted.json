@@ -1,0 +1,17 @@
+{
+  "name": "Aura (Inverted Colors Fix)",
+  "version": "1.4",
+  "home_assistant_domain": "",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32",
+      "parts": [
+        {
+          "path": "firmware-inverted.bin",
+          "offset": 0
+        }
+      ]
+    }
+  ]
+}
