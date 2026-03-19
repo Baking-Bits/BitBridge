@@ -14,6 +14,32 @@ __pycache__/
 **/.pio/
 *.elf
 *.map
+node_modules/
+**/node_modules/
+2.8inch_IPS_ESP32-S3_ILI9341V_ES3C28P_ES3N28P_V1.0/**/build/
 
 # Logs
 *.log
+
+# Local secrets / keys
+.env
+*.env
+!.env.example
+config/
+config/**
+.ssh/
+HomeLabManager/.env
+HomeLabManager/.env.*
+!HomeLabManager/.env.example
+*.pem
+*.key
+*.p12
+**/unraid_key
+**/unraid_key.*
+**/id_rsa
+**/id_rsa.*
+**/id_ed25519
+**/id_ed25519.*
+
+# Aura HomeLab local secret header
+Aura/aura/homelab_secrets.h

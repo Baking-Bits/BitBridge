@@ -1,0 +1,12 @@
+{
+  "name": "Factory Backup (ESP32-S3)",
+  "version": "local-backup",
+  "builds": [
+    {
+      "chipFamily": "ESP32-S3",
+      "parts": [
+        { "path": "factory-full-8mb.bin", "offset": 0 }
+      ]
+    }
+  ]
+}

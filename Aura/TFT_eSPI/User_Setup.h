@@ -54,7 +54,9 @@
 
 // Only define one driver, the other ones must be commented out
 //#define ILI9341_DRIVER       // Generic driver for common displays
+#if !defined(ILI9341_DRIVER) && !defined(ILI9341_2_DRIVER)
 #define ILI9341_2_DRIVER     // Alternative ILI9341 driver, see https://github.com/Bodmer/TFT_eSPI/issues/1172
+#endif
 //#define ST7735_DRIVER      // Define additional parameters below for this display
 //#define ILI9163_DRIVER     // Define additional parameters below for this display
 //#define S6D02A1_DRIVER
@@ -139,8 +141,12 @@
 // driven with a PWM signal or turned OFF/ON then this must be handled by the user
 // sketch. e.g. with digitalWrite(TFT_BL, LOW);
 
+#ifndef TFT_BL
 #define TFT_BL   21            // LED back-light control pin
+#endif
+#ifndef TFT_BACKLIGHT_ON
 #define TFT_BACKLIGHT_ON HIGH  // Level to turn ON back-light (HIGH or LOW)
+#endif
 
 
 
@@ -214,15 +220,29 @@
 // For ESP32 Dev board (only tested with ILI9341 display)
 // The hardware SPI can be mapped to any pins
 
+#ifndef TFT_MISO
 #define TFT_MISO 12
+#endif
+#ifndef TFT_MOSI
 #define TFT_MOSI 13
+#endif
+#ifndef TFT_SCLK
 #define TFT_SCLK 14
+#endif
+#ifndef TFT_CS
 #define TFT_CS   15  // Chip select control pin
+#endif
+#ifndef TFT_DC
 #define TFT_DC    2  // Data Command control pin
+#endif
 //#define TFT_RST   4  // Reset pin (could connect to RST pin)
+#ifndef TFT_RST
 #define TFT_RST  -1  // Set TFT_RST to -1 if display RESET is connected to ESP32 board RST
+#endif
 
+#ifndef TOUCH_CS
 #define TOUCH_CS 33     // Chip select pin (T_CS) of touch screen
+#endif
 
 // For ESP32 Dev board (only tested with GC9A01 display)
 // The hardware SPI can be mapped to any pins
@@ -369,14 +389,20 @@
 // #define SPI_FREQUENCY  20000000
 //#define SPI_FREQUENCY  27000000
 // #define SPI_FREQUENCY  40000000
+#ifndef SPI_FREQUENCY
 #define SPI_FREQUENCY  55000000 // STM32 SPI1 only (SPI2 maximum is 27MHz)
+#endif
 // #define SPI_FREQUENCY  80000000
 
 // Optional reduced SPI frequency for reading TFT
+#ifndef SPI_READ_FREQUENCY
 #define SPI_READ_FREQUENCY  20000000
+#endif
 
 // The XPT2046 requires a lower SPI clock rate of 2.5MHz so we define that here:
+#ifndef SPI_TOUCH_FREQUENCY
 #define SPI_TOUCH_FREQUENCY  2500000
+#endif
 
 // The ESP32 has 2 free SPI ports i.e. VSPI and HSPI, the VSPI is the default.
 // If the VSPI port is in use and pins are not accessible (e.g. TTGO T-Beam)

@@ -4,6 +4,17 @@ This project runs a local webpage + local firmware files so you can install ESP3
 
 Aura is already included as the first local package in `packages/aura`.
 
+## Recommended folder layout
+
+- `Aura/` → active PlatformIO source project (keep this; needed for builds)
+- `packages/` → installable outputs only (`manifest.json` + `.bin` files used by the web installer)
+- `backups/` → archived device backup images (timestamped snapshots)
+- `docs/` → human-readable project docs and references
+
+Current docs moved to:
+
+- `docs/AURA_AI_REFERENCE.md`
+
 ## Run locally
 
 1. Open PowerShell in this folder.
@@ -71,3 +82,4 @@ Example catalog entry:
 
 - Use Chrome or Edge for Web Serial support.
 - Keep manifest `parts` offsets exactly as exported by your build system.
+- Backup API keeps latest image in `packages/factory-s3/` for installer compatibility and also writes timestamped archives to `backups/factory-s3/`.

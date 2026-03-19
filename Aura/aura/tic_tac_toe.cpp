@@ -56,7 +56,7 @@ uint8_t TicTacToe::bot_move() {
   } else {
     // Minimax-based moves
     int max_depth = (difficulty == DIFFICULTY_EASY) ? 1 :
-                    (difficulty == DIFFICULTY_MEDIUM) ? 3 : 9;
+                    (difficulty == DIFFICULTY_MEDIUM) ? 2 : 4;
     move = find_best_move(max_depth);
   }
 

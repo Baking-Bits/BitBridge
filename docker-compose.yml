@@ -1,0 +1,28 @@
+services:
+  esp-control-plane:
+    build:
+      context: .
+      dockerfile: ESPControlPlane/Dockerfile
+    container_name: esp-control-plane
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    environment:
+      CONTROL_PLANE_HOST: 0.0.0.0
+      CONTROL_PLANE_PORT: 8787
+      CONTROL_PLANE_CONFIG_DIR: /config
+      CONTROL_PLANE_STATIC_ROOT: /app
+    volumes:
+      - ./config:/config
+      - ./packages:/app/packages
+      - ./bin:/app/bin
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - const http=require('http');const req=http.request({host:'127.0.0.1',port:8787,path:'/health',timeout:2000},(res)=>process.exit(res.statusCode===200?0:1));req.on('error',()=>process.exit(1));req.end();
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

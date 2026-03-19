@@ -1,20 +1,19 @@
 (async function () {
-  const selectEl = document.getElementById("deviceSelect");
-  const metaEl = document.getElementById("deviceMeta");
-  const variantListEl = document.getElementById("variantList");
-  const findLocationBtn = document.getElementById("findLocationBtn");
-  const copyLocationBtn = document.getElementById("copyLocationBtn");
-  const locationStatusEl = document.getElementById("locationStatus");
-  const locationResultEl = document.getElementById("locationResult");
+  const cydSelectEl = document.getElementById("cydSelect");
+  const cydMetaEl = document.getElementById("cydMeta");
+  const cydVariantListEl = document.getElementById("cydVariantList");
+  const s3SelectEl = document.getElementById("s3Select");
+  const s3MetaEl = document.getElementById("s3Meta");
+  const s3VariantListEl = document.getElementById("s3VariantList");
   const wifiSsidEl = document.getElementById("wifiSsid");
   const wifiPasswordEl = document.getElementById("wifiPassword");
-  const copyWifiSsidBtn = document.getElementById("copyWifiSsidBtn");
-  const copyWifiPasswordBtn = document.getElementById("copyWifiPasswordBtn");
-  const clearWifiCacheBtn = document.getElementById("clearWifiCacheBtn");
-  const wifiStatusEl = document.getElementById("wifiStatus");
-
-  let locationLatLon = "";
-  const WIFI_CACHE_KEY = "esp32InstallerLastWifiV1";
+  const sendWifiButtonEl = document.getElementById("sendWifiButton");
+  const wifiProvisionStatusEl = document.getElementById("wifiProvisionStatus");
+  const backupCurrentButtonEl = document.getElementById("backupCurrentButton");
+  const backupStatusEl = document.getElementById("backupStatus");
+  const backupPortEl = document.getElementById("backupPort");
+  const backupChipEl = document.getElementById("backupChip");
+  const backupBaudEl = document.getElementById("backupBaud");
 
   let packages = [];
 
@@ -25,53 +24,53 @@
     }
     packages = await response.json();
   } catch (error) {
-    selectEl.innerHTML = "<option>Catalog load failed</option>";
-    metaEl.textContent = String(error.message || error);
+    cydSelectEl.innerHTML = "<option>Catalog load failed</option>";
+    s3SelectEl.innerHTML  = "<option>Catalog load failed</option>";
+    cydMetaEl.textContent = String(error.message || error);
+    s3MetaEl.textContent  = String(error.message || error);
     return;
   }
 
   if (!Array.isArray(packages) || !packages.length) {
-    selectEl.innerHTML = "<option>No packages configured</option>";
-    metaEl.textContent = "Add entries in packages/catalog.json";
+    cydSelectEl.innerHTML = "<option>No packages configured</option>";
+    s3SelectEl.innerHTML = "<option>No packages configured</option>";
+    cydMetaEl.textContent = "Add entries in packages/catalog.json";
+    s3MetaEl.textContent = "Add entries in packages/catalog.json";
     return;
   }
 
-  for (const item of packages) {
-    const option = document.createElement("option");
-    option.value = item.id;
-    option.textContent = item.name;
-    selectEl.appendChild(option);
+  const cydPackages = packages.filter((item) => item.group === "cyd");
+  const s3Packages  = packages.filter((item) => item.group === "s3");
+
+  initializeGroup(cydPackages, cydSelectEl, cydMetaEl, cydVariantListEl, "No CYD builds configured");
+  initializeGroup(s3Packages,  s3SelectEl,  s3MetaEl,  s3VariantListEl,  "No S3 builds configured");
+
+  sendWifiButtonEl?.addEventListener("click", provisionWifiOverSerial);
+  backupCurrentButtonEl?.addEventListener("click", saveCurrentImage);
+  loadBackupStatus();
+
+  function initializeGroup(groupPackages, selectEl, metaEl, variantListEl, emptyMessage) {
+    if (!groupPackages.length) {
+      selectEl.innerHTML = `<option>${emptyMessage}</option>`;
+      metaEl.textContent = emptyMessage;
+      variantListEl.innerHTML = "";
+      return;
+    }
+
+    for (const item of groupPackages) {
+      const option = document.createElement("option");
+      option.value = item.id;
+      option.textContent = item.name;
+      selectEl.appendChild(option);
+    }
+
+    selectEl.addEventListener("change", () => renderPackageGroup(groupPackages, selectEl, metaEl, variantListEl));
+    renderPackageGroup(groupPackages, selectEl, metaEl, variantListEl);
   }
 
-  selectEl.addEventListener("change", renderPackage);
-  renderPackage();
-
-  if (findLocationBtn) {
-    findLocationBtn.addEventListener("click", findLocationByIp);
-  }
-
-  if (copyLocationBtn) {
-    copyLocationBtn.addEventListener("click", async () => {
-      if (!locationLatLon) {
-        return;
-      }
-      try {
-        await navigator.clipboard.writeText(locationLatLon);
-        copyLocationBtn.textContent = "Copied";
-        setTimeout(() => {
-          copyLocationBtn.textContent = "Copy lat,lon";
-        }, 1200);
-      } catch (_error) {
-        copyLocationBtn.textContent = "Copy failed";
-      }
-    });
-  }
-
-  initializeWifiCache();
-
-  function renderPackage() {
+  function renderPackageGroup(groupPackages, selectEl, metaEl, variantListEl) {
     const selectedId = selectEl.value;
-    const pkg = packages.find((item) => item.id === selectedId) || packages[0];
+    const pkg = groupPackages.find((item) => item.id === selectedId) || groupPackages[0];
 
     const metaParts = [pkg.boardHint].filter(Boolean);
     if (pkg.docsUrl) {
@@ -99,231 +98,264 @@
         card.appendChild(note);
       }
 
+      if (variant.buildLabel) {
+        const build = document.createElement("p");
+        build.className = "small mb-2";
+        build.textContent = `Build: ${variant.buildLabel}`;
+        card.appendChild(build);
+      }
+
+      const imageStatus = document.createElement("p");
+      imageStatus.className = "small text-muted mb-2";
+      imageStatus.textContent = variant.manifest ? "Image status: checking..." : "Image status: source build required";
+      card.appendChild(imageStatus);
+
       const actions = document.createElement("div");
       actions.className = "variant-actions";
 
-      const installButton = document.createElement("esp-web-install-button");
-      installButton.setAttribute("manifest", variant.manifest);
-      actions.appendChild(installButton);
+      if (variant.manifest) {
+        const installButton = document.createElement("esp-web-install-button");
+        installButton.setAttribute("manifest", variant.manifest);
+        actions.appendChild(installButton);
+      }
 
-      const copyButton = document.createElement("button");
-      copyButton.type = "button";
-      copyButton.className = "btn btn-outline-secondary btn-sm";
-      copyButton.textContent = "Copy manifest path";
-      copyButton.addEventListener("click", async () => {
-        try {
-          await navigator.clipboard.writeText(variant.manifest);
-          copyButton.textContent = "Copied";
-          setTimeout(() => {
-            copyButton.textContent = "Copy manifest path";
-          }, 1200);
-        } catch (_error) {
-          copyButton.textContent = "Copy failed";
-        }
-      });
-      actions.appendChild(copyButton);
+      if (variant.manifest) {
+        const copyButton = document.createElement("button");
+        copyButton.type = "button";
+        copyButton.className = "btn btn-outline-secondary btn-sm";
+        copyButton.textContent = "Copy manifest path";
+        copyButton.addEventListener("click", async () => {
+          try {
+            await navigator.clipboard.writeText(variant.manifest);
+            copyButton.textContent = "Copied";
+            setTimeout(() => {
+              copyButton.textContent = "Copy manifest path";
+            }, 1200);
+          } catch (_error) {
+            copyButton.textContent = "Copy failed";
+          }
+        });
+        actions.appendChild(copyButton);
+      }
+
+      if (variant.repoUrl) {
+        const repoButton = document.createElement("a");
+        repoButton.className = "btn btn-outline-primary btn-sm";
+        repoButton.href = variant.repoUrl;
+        repoButton.target = "_blank";
+        repoButton.rel = "noopener";
+        repoButton.textContent = "Open source repo";
+        actions.appendChild(repoButton);
+      }
+
+      if (variant.guideUrl) {
+        const guideButton = document.createElement("a");
+        guideButton.className = "btn btn-outline-secondary btn-sm";
+        guideButton.href = variant.guideUrl;
+        guideButton.target = "_blank";
+        guideButton.rel = "noopener";
+        guideButton.textContent = "Build guide";
+        actions.appendChild(guideButton);
+      }
 
       card.appendChild(actions);
       variantListEl.appendChild(card);
+
+      if (variant.manifest) {
+        updateVariantImageStatus(variant, imageStatus);
+      }
     }
   }
 
-  async function findLocationByIp() {
-    locationStatusEl.textContent = "Looking up location...";
-    locationResultEl.innerHTML = "";
-    locationLatLon = "";
-    if (copyLocationBtn) {
-      copyLocationBtn.disabled = true;
-    }
-
-    const providers = [
-      {
-        name: "ipapi.co",
-        url: "https://ipapi.co/json/",
-        parse: (data) => ({
-          city: data.city,
-          region: data.region,
-          country: data.country_name,
-          timezone: data.timezone,
-          latitude: data.latitude,
-          longitude: data.longitude,
-          ip: data.ip
-        })
-      },
-      {
-        name: "ipwho.is",
-        url: "https://ipwho.is/",
-        parse: (data) => ({
-          city: data.city,
-          region: data.region,
-          country: data.country,
-          timezone: data.timezone && data.timezone.id,
-          latitude: data.latitude,
-          longitude: data.longitude,
-          ip: data.ip
-        })
-      }
-    ];
-
-    let location = null;
-    let usedProvider = "";
-
-    for (const provider of providers) {
-      try {
-        const response = await fetch(provider.url, { cache: "no-store" });
-        if (!response.ok) {
-          continue;
-        }
-        const raw = await response.json();
-        const parsed = provider.parse(raw);
-        if (Number.isFinite(Number(parsed.latitude)) && Number.isFinite(Number(parsed.longitude))) {
-          location = parsed;
-          usedProvider = provider.name;
-          break;
-        }
-      } catch (_error) {
-      }
-    }
-
-    if (!location) {
-      locationStatusEl.textContent = "Could not determine location from IP. Check internet access and try again.";
+  async function updateVariantImageStatus(variant, statusEl) {
+    if (!variant || !variant.manifest || !statusEl) {
       return;
     }
 
-    const latitude = Number(location.latitude);
-    const longitude = Number(location.longitude);
-    locationLatLon = `${latitude.toFixed(6)},${longitude.toFixed(6)}`;
+    try {
+      const manifestResponse = await fetch(variant.manifest, { cache: "no-store" });
+      if (!manifestResponse.ok) {
+        throw new Error(`Manifest unavailable (${manifestResponse.status})`);
+      }
 
-    locationStatusEl.textContent = `Location found via ${usedProvider}.`;
-    locationResultEl.innerHTML = `
-      <div><strong>City:</strong> ${safeText(location.city)}</div>
-      <div><strong>Region:</strong> ${safeText(location.region)}</div>
-      <div><strong>Country:</strong> ${safeText(location.country)}</div>
-      <div><strong>Timezone:</strong> ${safeText(location.timezone)}</div>
-      <div><strong>IP:</strong> ${safeText(location.ip)}</div>
-      <div><strong>Lat/Lon:</strong> <span class="latlon-value">${safeText(locationLatLon)}</span></div>
-    `;
-
-    if (copyLocationBtn) {
-      copyLocationBtn.disabled = false;
-    }
-  }
-
-  function initializeWifiCache() {
-    if (!wifiSsidEl || !wifiPasswordEl) {
-      return;
-    }
-
-    const cached = readWifiCache();
-    if (cached) {
-      wifiSsidEl.value = cached.ssid || "";
-      wifiPasswordEl.value = cached.password || "";
-      setWifiStatus("Loaded saved Wi-Fi credentials from this browser.");
-    }
-
-    const persist = () => {
-      const ssid = wifiSsidEl.value.trim();
-      const password = wifiPasswordEl.value;
-      if (!ssid && !password) {
-        localStorage.removeItem(WIFI_CACHE_KEY);
-        setWifiStatus("No saved Wi-Fi credentials yet.");
+      const manifest = await manifestResponse.json();
+      const builds = Array.isArray(manifest.builds) ? manifest.builds : [];
+      const parts = builds.flatMap((build) => (Array.isArray(build.parts) ? build.parts : []));
+      if (!parts.length) {
+        statusEl.textContent = "Image status: manifest has no parts";
         return;
       }
+
+      const manifestUrl = new URL(variant.manifest, window.location.href);
+      const metaList = await Promise.all(
+        parts.map(async (part) => {
+          if (!part || !part.path) {
+            return null;
+          }
+          const partUrl = new URL(part.path, manifestUrl);
+
+          let response = await fetch(partUrl.toString(), { method: "HEAD", cache: "no-store" });
+          if (!response.ok) {
+            response = await fetch(partUrl.toString(), { cache: "no-store" });
+          }
+          if (!response.ok) {
+            throw new Error(`Missing image part: ${part.path}`);
+          }
+
+          const contentLengthHeader = response.headers.get("content-length");
+          const parsedLength = contentLengthHeader ? Number.parseInt(contentLengthHeader, 10) : NaN;
+          const lastModifiedHeader = response.headers.get("last-modified");
+          const lastModifiedMs = lastModifiedHeader ? Date.parse(lastModifiedHeader) : NaN;
+
+          if (response.body && !response.body.locked) {
+            response.body.cancel().catch(() => {});
+          }
+
+          return {
+            size: Number.isFinite(parsedLength) ? parsedLength : 0,
+            modifiedMs: Number.isFinite(lastModifiedMs) ? lastModifiedMs : 0
+          };
+        })
+      );
+
+      const validMeta = metaList.filter(Boolean);
+      const totalBytes = validMeta.reduce((sum, item) => sum + item.size, 0);
+      const latestMs = validMeta.reduce((max, item) => Math.max(max, item.modifiedMs), 0);
+      const updatedText = latestMs > 0 ? new Date(latestMs).toLocaleString() : "unknown time";
+
+      statusEl.textContent = `Image status: ${formatBytes(totalBytes)} total · updated ${updatedText}`;
+    } catch (error) {
+      statusEl.textContent = `Image status: unavailable (${String(error.message || error)})`;
+    }
+  }
+
+  function formatBytes(bytes) {
+    if (!Number.isFinite(bytes) || bytes <= 0) {
+      return "0 B";
+    }
+    const units = ["B", "KB", "MB", "GB"];
+    let value = bytes;
+    let unitIndex = 0;
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value /= 1024;
+      unitIndex += 1;
+    }
+    const decimals = value >= 100 || unitIndex === 0 ? 0 : 1;
+    return `${value.toFixed(decimals)} ${units[unitIndex]}`;
+  }
+
+  async function provisionWifiOverSerial() {
+    if (!wifiSsidEl || !wifiPasswordEl || !wifiProvisionStatusEl) {
+      return;
+    }
+
+    const ssid = (wifiSsidEl.value || "").trim();
+    const password = wifiPasswordEl.value || "";
+
+    if (!ssid) {
+      wifiProvisionStatusEl.textContent = "Enter SSID first.";
+      return;
+    }
+
+    if (!navigator.serial) {
+      wifiProvisionStatusEl.textContent = "Web Serial not supported in this browser. Use Chrome/Edge.";
+      return;
+    }
+
+    let port;
+    let writer;
+
+    try {
+      wifiProvisionStatusEl.textContent = "Select ESP32 serial port...";
+      port = await navigator.serial.requestPort();
+      await port.open({ baudRate: 115200 });
+
       const payload = {
         ssid,
-        password,
-        updatedAt: Date.now()
+        password
       };
-      localStorage.setItem(WIFI_CACHE_KEY, JSON.stringify(payload));
-      setWifiStatus("Saved in browser cache for next visit.");
-    };
+      const line = `AURA_WIFI ${JSON.stringify(payload)}\n`;
+      const encoder = new TextEncoder();
 
-    wifiSsidEl.addEventListener("input", persist);
-    wifiPasswordEl.addEventListener("input", persist);
+      writer = port.writable?.getWriter();
+      if (!writer) {
+        throw new Error("Serial writer unavailable");
+      }
 
-    if (copyWifiSsidBtn) {
-      copyWifiSsidBtn.addEventListener("click", async () => {
-        await copyTextWithFeedback(wifiSsidEl.value, copyWifiSsidBtn, "Copy SSID");
-      });
-    }
-
-    if (copyWifiPasswordBtn) {
-      copyWifiPasswordBtn.addEventListener("click", async () => {
-        await copyTextWithFeedback(wifiPasswordEl.value, copyWifiPasswordBtn, "Copy password");
-      });
-    }
-
-    if (clearWifiCacheBtn) {
-      clearWifiCacheBtn.addEventListener("click", () => {
-        localStorage.removeItem(WIFI_CACHE_KEY);
-        wifiSsidEl.value = "";
-        wifiPasswordEl.value = "";
-        setWifiStatus("Saved Wi-Fi credentials cleared.");
-      });
+      await writer.write(encoder.encode(line));
+      wifiProvisionStatusEl.textContent = "Wi-Fi sent. Aura should connect and reboot.";
+    } catch (error) {
+      wifiProvisionStatusEl.textContent = `Wi-Fi send failed: ${String(error.message || error)}`;
+    } finally {
+      if (writer) {
+        try {
+          writer.releaseLock();
+        } catch (_error) {}
+      }
+      if (port) {
+        try {
+          await port.close();
+        } catch (_error) {}
+      }
     }
   }
 
-  function readWifiCache() {
+  async function loadBackupStatus() {
+    if (!backupStatusEl) {
+      return;
+    }
+    backupStatusEl.textContent = "Checking backup status...";
     try {
-      const raw = localStorage.getItem(WIFI_CACHE_KEY);
-      if (!raw) {
-        return null;
+      const response = await fetch("./api/backup-status", { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`Status HTTP ${response.status}`);
       }
-      const parsed = JSON.parse(raw);
-      if (!parsed || typeof parsed !== "object") {
-        return null;
+      const data = await response.json();
+      if (data?.hasBackup && data?.meta?.capturedAt) {
+        const captured = new Date(data.meta.capturedAt).toLocaleString();
+        const bytes = formatBytes(Number(data.meta.bytes || 0));
+        backupStatusEl.textContent = `Saved: ${captured} · ${bytes}`;
+      } else {
+        backupStatusEl.textContent = "No saved backup yet.";
       }
-      return {
-        ssid: typeof parsed.ssid === "string" ? parsed.ssid : "",
-        password: typeof parsed.password === "string" ? parsed.password : ""
-      };
-    } catch (_error) {
-      return null;
+    } catch (error) {
+      backupStatusEl.textContent = `Backup status unavailable: ${String(error.message || error)}`;
     }
   }
 
-  function setWifiStatus(message) {
-    if (!wifiStatusEl) {
+  async function saveCurrentImage() {
+    if (!backupStatusEl || !backupCurrentButtonEl) {
       return;
     }
-    wifiStatusEl.textContent = message;
-  }
 
-  async function copyTextWithFeedback(value, buttonEl, originalText) {
-    if (!buttonEl) {
-      return;
-    }
-    if (!value) {
-      buttonEl.textContent = "Nothing to copy";
-      setTimeout(() => {
-        buttonEl.textContent = originalText;
-      }, 1200);
-      return;
-    }
+    const port = (backupPortEl?.value || "COM3").trim() || "COM3";
+    const chip = (backupChipEl?.value || "esp32s3").trim() || "esp32s3";
+    const baudRaw = Number.parseInt((backupBaudEl?.value || "460800").trim(), 10);
+    const baud = Number.isFinite(baudRaw) && baudRaw > 0 ? baudRaw : 460800;
+
+    backupCurrentButtonEl.disabled = true;
+    backupStatusEl.textContent = `Saving image from ${port}... this can take a few minutes.`;
 
     try {
-      await navigator.clipboard.writeText(value);
-      buttonEl.textContent = "Copied";
-      setTimeout(() => {
-        buttonEl.textContent = originalText;
-      }, 1200);
-    } catch (_error) {
-      buttonEl.textContent = "Copy failed";
-      setTimeout(() => {
-        buttonEl.textContent = originalText;
-      }, 1200);
-    }
-  }
+      const response = await fetch("./api/backup-current", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ port, chip, baud, sizeHex: "0x800000" })
+      });
 
-  function safeText(value) {
-    if (value === null || value === undefined || value === "") {
-      return "-";
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || `Backup failed (HTTP ${response.status})`);
+      }
+
+      const bytes = formatBytes(Number(data.bytes || 0));
+      const when = data.capturedAt ? new Date(data.capturedAt).toLocaleString() : "just now";
+      backupStatusEl.textContent = `Saved OK: ${bytes} · ${when}. Refreshing package list...`;
+      setTimeout(() => window.location.reload(), 900);
+    } catch (error) {
+      backupStatusEl.textContent = `Backup failed: ${String(error.message || error)}`;
+    } finally {
+      backupCurrentButtonEl.disabled = false;
     }
-    return String(value)
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#39;");
   }
 })();

@@ -1,28 +1,201 @@
 [
   {
-    "id": "aura",
-    "name": "Aura - ESP32-2432S028R (CYD)",
-    "boardHint": "2.8in ILI9341 display board",
+    "id": "cyd-weather-ip-qr-no-pet",
+    "group": "cyd",
+    "name": "Aura Weather (No Pet)",
+    "boardHint": "ESP32-2432S028R (CYD)",
     "docsUrl": "https://makerworld.com/en/models/1382304-aura-smart-weather-forecast-display",
     "packagePath": "./packages/aura/",
     "variants": [
       {
-        "id": "stable",
-        "label": "Install Aura",
-        "notes": "Main release",
-        "manifest": "./packages/aura/manifest.json"
-      },
-      {
-        "id": "inverted",
-        "label": "Install Aura (Inverted Colors)",
-        "notes": "Use if colors are inverted",
-        "manifest": "./packages/aura/manifest-inverted.json"
-      },
-      {
-        "id": "ip-geo",
-        "label": "Install Aura + IP Geolocation",
-        "notes": "Adds 'Use My IP' button in location settings for automatic lat/lon detection",
+        "id": "weather-ip-qr-no-pet",
+        "label": "Install Aura Weather (No Pet)",
+        "notes": "Weather-focused build with IP lookup and QR code setup flow. No pet features.",
+        "buildLabel": "CYD weather-only",
         "manifest": "./packages/aura/manifest-ip.json"
+      }
+    ]
+  },
+  {
+    "id": "cyd-weather-all-pet",
+    "group": "cyd",
+    "name": "Aura Weather + Pet",
+    "boardHint": "ESP32-2432S028R (CYD)",
+    "docsUrl": "https://makerworld.com/en/models/1382304-aura-smart-weather-forecast-display",
+    "packagePath": "./packages/aura/",
+    "variants": [
+      {
+        "id": "weather-all-pet",
+        "label": "Install Aura Weather + Pet",
+        "notes": "Full weather build with virtual pet and all extras.",
+        "buildLabel": "CYD full feature set",
+        "manifest": "./packages/aura/manifest.json"
+      }
+    ]
+  },
+  {
+    "id": "cyd-tamagotchi",
+    "group": "cyd",
+    "name": "Tamagotchi",
+    "boardHint": "ESP32-2432S028R (CYD)",
+    "docsUrl": "https://github.com/RBEGamer/TamagotchiESP32",
+    "packagePath": "./packages/tamagotchi-cyd/",
+    "variants": [
+      {
+        "id": "tamagotchi-cyd",
+        "label": "Install Tamagotchi",
+        "notes": "Standalone Tamagotchi for CYD touch display.",
+        "buildLabel": "CYD Tamagotchi",
+        "manifest": "./packages/tamagotchi-cyd/manifest.json"
+      }
+    ]
+  },
+  {
+    "id": "cyd-homelab-manager",
+    "group": "cyd",
+    "name": "HomeLab Manager",
+    "boardHint": "ESP32-2432S028R (CYD)",
+    "docsUrl": "",
+    "packagePath": "./packages/homelab-cyd/",
+    "variants": [
+      {
+        "id": "homelab-cyd",
+        "label": "Install HomeLab Manager",
+        "notes": "Monitor Jellyfin/Jellyseerr and trigger restart actions from the CYD touch UI.",
+        "buildLabel": "CYD HomeLab",
+        "manifest": "./packages/homelab-cyd/manifest.json"
+      }
+    ]
+  },
+  {
+    "id": "s3-aura-weather-homelab",
+    "group": "s3",
+    "name": "Aura S3 (Weather + HomeLab)",
+    "boardHint": "ESP32-S3 2.8\" 240×320 IPS Touch (ES3C28P / ES3N28P)",
+    "docsUrl": "",
+    "packagePath": "./packages/aura-s3/",
+    "variants": [
+      {
+        "id": "aura-s3",
+        "label": "Install Aura S3 (Weather + HomeLab)",
+        "notes": "S3 build: weather display, HomeLab tab (Jellyfin/Jellyseerr), mic, speaker, battery monitor.",
+        "buildLabel": "S3 Aura",
+        "manifest": "./packages/aura-s3/manifest.json"
+      }
+    ]
+  },
+  {
+    "id": "s3-homelab-manager",
+    "group": "s3",
+    "name": "HomeLab Manager (S3)",
+    "boardHint": "ESP32-S3 2.8\" 240×320 IPS Touch (ES3C28P / ES3N28P)",
+    "docsUrl": "",
+    "packagePath": "./packages/homelab-s3/",
+    "variants": [
+      {
+        "id": "homelab-s3",
+        "label": "Install HomeLab Manager (S3)",
+        "notes": "Standalone HomeLab dashboard for the ESP32-S3 touch display.",
+        "buildLabel": "S3 HomeLab",
+        "manifest": "./packages/homelab-s3/manifest.json"
+      }
+    ]
+  },
+  {
+    "id": "s3-aura-rescue",
+    "group": "s3",
+    "name": "Aura S3 Rescue (Display A/B Test)",
+    "boardHint": "ESP32-S3 recovery build (no Wi-Fi, no touch)",
+    "docsUrl": "",
+    "packagePath": "./packages/aura-s3-rescue/",
+    "variants": [
+      {
+        "id": "aura-s3-rescue-a",
+        "label": "Install Rescue A (S3 mapping from listing)",
+        "notes": "ILI9341 driver + S3 map MOSI11/SCLK12/CS10/DC46/BL45.",
+        "buildLabel": "Rescue A",
+        "manifest": "./packages/aura-s3-rescue/manifest.json"
+      },
+      {
+        "id": "aura-s3-rescue-b",
+        "label": "Install Rescue B (Alt ILI9341_2 driver)",
+        "notes": "Same S3 pin map as A, but ILI9341_2 driver variant.",
+        "buildLabel": "Rescue B",
+        "manifest": "./packages/aura-s3-rescue-alt/manifest.json"
+      },
+      {
+        "id": "aura-s3-rescue-c",
+        "label": "Install Rescue C (Legacy CYD pin map)",
+        "notes": "Legacy CYD pins MOSI13/SCLK14/CS15/DC2/BL21 on S3.",
+        "buildLabel": "Rescue C",
+        "manifest": "./packages/aura-s3-rescue-legacypins/manifest.json"
+      },
+      {
+        "id": "aura-s3-rescue-d",
+        "label": "Install Rescue D (Diagnostic low-speed)",
+        "notes": "Low SPI clock + serial/RGB liveness + backlight pulse diagnostics.",
+        "buildLabel": "Rescue D",
+        "manifest": "./packages/aura-s3-rescue-diag/manifest.json"
+      },
+      {
+        "id": "aura-s3-rescue-d2",
+        "label": "Install Rescue D2 (Diagnostic USB CDC)",
+        "notes": "Rescue D with forced USB CDC on boot for serial capture.",
+        "buildLabel": "Rescue D2",
+        "manifest": "./packages/aura-s3-rescue-diag2/manifest.json"
+      }
+    ]
+  },
+  {
+    "id": "s3-aura-lifesign",
+    "group": "s3",
+    "name": "Aura S3 Lifesign (No TFT)",
+    "boardHint": "ESP32-S3 low-level runtime check",
+    "docsUrl": "",
+    "packagePath": "./packages/aura-s3-lifesign/",
+    "variants": [
+      {
+        "id": "aura-s3-lifesign",
+        "label": "Install Lifesign (No TFT)",
+        "notes": "No display/touch code; pulses common pins and prints serial ticks.",
+        "buildLabel": "Lifesign",
+        "manifest": "./packages/aura-s3-lifesign/manifest.json"
+      }
+    ]
+  },
+  {
+    "id": "original-weather",
+    "group": "original",
+    "name": "Original Weather (QR + Recent Wi-Fi, No Pet)",
+    "boardHint": "Original/reference weather target",
+    "docsUrl": "https://makerworld.com/en/models/1382304-aura-smart-weather-forecast-display",
+    "packagePath": "./packages/aura/",
+    "variants": [
+      {
+        "id": "original-weather",
+        "label": "Install Original Weather (QR + Recent Wi-Fi, No Pet)",
+        "notes": "Original weather build refreshed with weather-focused improvements only.",
+        "buildLabel": "Original weather",
+        "manifest": "./packages/aura/manifest-ip.json"
+      }
+    ]
+  },
+  {
+    "id": "original-tamagotchi-esp32",
+    "group": "original",
+    "name": "Original TamagotchiESP32",
+    "boardHint": "ESP32 Dev + SSD1306 128x64 OLED",
+    "docsUrl": "https://github.com/RBEGamer/TamagotchiESP32",
+    "packagePath": "./packages/tamagotchi-esp32/",
+    "variants": [
+      {
+        "id": "original-tamagotchi-esp32",
+        "label": "Install Original TamagotchiESP32",
+        "notes": "ESP32 Dev + SSD1306 128x64 OLED upstream-style package.",
+        "buildLabel": "Original external target",
+        "manifest": "./packages/tamagotchi-esp32/manifest.json",
+        "repoUrl": "https://github.com/RBEGamer/TamagotchiESP32",
+        "guideUrl": "https://github.com/RBEGamer/TamagotchiESP32#build"
       }
     ]
   }
