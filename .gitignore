@@ -25,8 +25,15 @@ node_modules/
 .env
 *.env
 !.env.example
-config/
-config/**
+# config folder: track structure and examples, block real secrets
+config/config.json
+config/.env
+config/unraid_key
+config/unraid_key.*
+config/id_rsa
+config/id_rsa.*
+config/id_ed25519
+config/id_ed25519.*
 .ssh/
 HomeLabManager/.env
 HomeLabManager/.env.*

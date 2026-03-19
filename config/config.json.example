@@ -1,0 +1,19 @@
+{
+  "server": {
+    "token": "your-secret-token-here"
+  },
+  "unraid": {
+    "host": "192.168.1.x",
+    "port": 22,
+    "username": "root",
+    "privateKeyPath": "/config/unraid_key"
+  },
+  "jellyfin": {
+    "baseUrl": "http://192.168.1.x:8096",
+    "apiKey": "your-jellyfin-api-key"
+  },
+  "jellyseerr": {
+    "baseUrl": "http://192.168.1.x:5055",
+    "apiKey": "your-jellyseerr-api-key"
+  }
+}
