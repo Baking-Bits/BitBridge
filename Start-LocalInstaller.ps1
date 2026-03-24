@@ -195,6 +195,128 @@ function Handle-BackupStatus {
   Write-JsonResponse -context $context -payload @{ ok = $true; hasBackup = $false }
 }
 
+function Get-ControlPlaneToken {
+  param([Parameter(Mandatory=$true)][string]$root)
+
+  $configPath = Join-Path $root "config\config.json"
+  if (-not (Test-Path -LiteralPath $configPath -PathType Leaf)) {
+    return ""
+  }
+
+  try {
+    $cfg = Get-Content -Raw -LiteralPath $configPath | ConvertFrom-Json
+    if ($null -ne $cfg.server -and $null -ne $cfg.server.token) {
+      return ([string]$cfg.server.token).Trim()
+    }
+  } catch {}
+
+  return ""
+}
+
+function Test-RequestAuthorized {
+  param(
+    [Parameter(Mandatory=$true)]$context,
+    [Parameter(Mandatory=$true)][string]$root
+  )
+
+  $token = Get-ControlPlaneToken -root $root
+  if ([string]::IsNullOrWhiteSpace($token)) {
+    return $true
+  }
+
+  $headerToken = $context.Request.Headers["x-control-plane-key"]
+  return ($headerToken -eq $token)
+}
+
+function Get-KnownWifiNetworks {
+  param([Parameter(Mandatory=$true)][string]$root)
+
+  $configPath = Join-Path $root "config\config.json"
+  if (-not (Test-Path -LiteralPath $configPath -PathType Leaf)) {
+    return @()
+  }
+
+  try {
+    $cfg = Get-Content -Raw -LiteralPath $configPath | ConvertFrom-Json
+    $rawList = @($cfg.wifi.knownNetworks)
+    if (-not $rawList -or $rawList.Count -eq 0) {
+      return @()
+    }
+
+    $normalized = New-Object System.Collections.Generic.List[object]
+    $index = 0
+    foreach ($entry in $rawList) {
+      $index += 1
+      if ($null -eq $entry) { continue }
+
+      $ssid = ""
+      if ($null -ne $entry.ssid) {
+        $ssid = ([string]$entry.ssid).Trim()
+      }
+      if ([string]::IsNullOrWhiteSpace($ssid)) {
+        continue
+      }
+
+      $enabled = $true
+      if ($null -ne $entry.enabled) {
+        $enabled = [bool]$entry.enabled
+      }
+      if (-not $enabled) {
+        continue
+      }
+
+      $label = $ssid
+      if ($null -ne $entry.label -and -not [string]::IsNullOrWhiteSpace([string]$entry.label)) {
+        $label = ([string]$entry.label).Trim()
+      }
+
+      $priority = $index
+      if ($null -ne $entry.priority -and [int]::TryParse([string]$entry.priority, [ref]$priority)) {
+      } else {
+        $priority = $index
+      }
+
+      $id = "wifi-$index"
+      if ($null -ne $entry.id -and -not [string]::IsNullOrWhiteSpace([string]$entry.id)) {
+        $id = ([string]$entry.id).Trim()
+      }
+
+      $password = ""
+      if ($null -ne $entry.password) {
+        $password = [string]$entry.password
+      }
+
+      $normalized.Add([ordered]@{
+        id = $id
+        label = $label
+        ssid = $ssid
+        password = $password
+        enabled = $enabled
+        priority = $priority
+      }) | Out-Null
+    }
+
+    return @($normalized | Sort-Object -Property priority)
+  } catch {
+    return @()
+  }
+}
+
+function Handle-KnownWifiNetworks {
+  param(
+    [Parameter(Mandatory=$true)]$context,
+    [Parameter(Mandatory=$true)][string]$root
+  )
+
+  if (-not (Test-RequestAuthorized -context $context -root $root)) {
+    Write-JsonResponse -context $context -payload @{ ok = $false; error = "unauthorized" } -statusCode 401
+    return
+  }
+
+  $networks = Get-KnownWifiNetworks -root $root
+  Write-JsonResponse -context $context -payload @{ ok = $true; networks = $networks }
+}
+
 while ($listener.IsListening) {
   $context = $listener.GetContext()
   try {
@@ -207,6 +329,11 @@ while ($listener.IsListening) {
 
     if ($requestPath -eq "/api/backup-status" -and $context.Request.HttpMethod -eq "GET") {
       Handle-BackupStatus -context $context -root $root
+      continue
+    }
+
+    if ($requestPath -eq "/api/wifi/known" -and $context.Request.HttpMethod -eq "GET") {
+      Handle-KnownWifiNetworks -context $context -root $root
       continue
     }
 

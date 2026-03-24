@@ -1,19 +1,41 @@
 {
   "server": {
-    "token": "your-secret-token-here"
+    "host": "0.0.0.0",
+    "port": 8787,
+    "token": "",
+    "static": {
+      "root": "/app"
+    }
+  },
+  "wifi": {
+    "knownNetworks": [
+      {
+        "id": "primary-home",
+        "label": "Home Primary",
+        "ssid": "MyHomeWiFi",
+        "password": "",
+        "enabled": true,
+        "priority": 1
+      }
+    ]
   },
   "unraid": {
-    "host": "192.168.1.x",
+    "host": "",
     "port": 22,
-    "username": "root",
-    "privateKeyPath": "/config/unraid_key"
+    "username": "",
+    "privateKeyPath": "/config/unraid_key",
+    "privateKeyPassphrase": "",
+    "containers": {
+      "jellyfin": "jellyfin",
+      "jellyseerr": "jellyseerr"
+    }
   },
   "jellyfin": {
-    "baseUrl": "http://192.168.1.x:8096",
-    "apiKey": "your-jellyfin-api-key"
+    "baseUrl": "",
+    "apiKey": ""
   },
   "jellyseerr": {
-    "baseUrl": "http://192.168.1.x:5055",
-    "apiKey": "your-jellyseerr-api-key"
+    "baseUrl": "",
+    "apiKey": ""
   }
 }

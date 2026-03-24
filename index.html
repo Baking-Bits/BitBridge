@@ -52,6 +52,22 @@
             <p class="text-muted mb-3">
               Enter Wi-Fi details here, flash firmware, then send them over USB so Aura boots already configured.
             </p>
+            <div class="row g-2 mb-3">
+              <div class="col-md-6">
+                <label for="wifiToken" class="form-label">Control Plane Token (optional)</label>
+                <input id="wifiToken" type="password" class="form-control" autocomplete="off" placeholder="x-control-plane-key" />
+              </div>
+              <div class="col-md-6">
+                <label for="knownWifiSelect" class="form-label">Known Wi-Fi from server</label>
+                <div class="d-flex gap-2">
+                  <select id="knownWifiSelect" class="form-select">
+                    <option value="">No known Wi-Fi loaded</option>
+                  </select>
+                  <button id="loadKnownWifiButton" type="button" class="btn btn-outline-secondary btn-sm">Load</button>
+                  <button id="applyKnownWifiButton" type="button" class="btn btn-outline-primary btn-sm">Use</button>
+                </div>
+              </div>
+            </div>
             <div class="row g-2">
               <div class="col-md-6">
                 <label for="wifiSsid" class="form-label">Wi-Fi SSID</label>

@@ -7,6 +7,18 @@
       "root": "/app"
     }
   },
+  "wifi": {
+    "knownNetworks": [
+      {
+        "id": "primary-home",
+        "label": "Home Primary",
+        "ssid": "MyHomeWiFi",
+        "password": "",
+        "enabled": true,
+        "priority": 1
+      }
+    ]
+  },
   "jellyfin": {
     "baseUrl": "",
     "apiKey": ""

@@ -7,6 +7,10 @@
   const s3VariantListEl = document.getElementById("s3VariantList");
   const wifiSsidEl = document.getElementById("wifiSsid");
   const wifiPasswordEl = document.getElementById("wifiPassword");
+  const wifiTokenEl = document.getElementById("wifiToken");
+  const knownWifiSelectEl = document.getElementById("knownWifiSelect");
+  const loadKnownWifiButtonEl = document.getElementById("loadKnownWifiButton");
+  const applyKnownWifiButtonEl = document.getElementById("applyKnownWifiButton");
   const sendWifiButtonEl = document.getElementById("sendWifiButton");
   const wifiProvisionStatusEl = document.getElementById("wifiProvisionStatus");
   const backupCurrentButtonEl = document.getElementById("backupCurrentButton");
@@ -14,8 +18,10 @@
   const backupPortEl = document.getElementById("backupPort");
   const backupChipEl = document.getElementById("backupChip");
   const backupBaudEl = document.getElementById("backupBaud");
+  const controlPlaneTokenStorageKey = "controlPlaneToken";
 
   let packages = [];
+  let knownNetworks = [];
 
   try {
     const response = await fetch("./packages/catalog.json", { cache: "no-store" });
@@ -46,8 +52,130 @@
   initializeGroup(s3Packages,  s3SelectEl,  s3MetaEl,  s3VariantListEl,  "No S3 builds configured");
 
   sendWifiButtonEl?.addEventListener("click", provisionWifiOverSerial);
+  loadKnownWifiButtonEl?.addEventListener("click", () => {
+    loadKnownWifiNetworks({ showStatus: true });
+  });
+  applyKnownWifiButtonEl?.addEventListener("click", applySelectedKnownWifi);
+  wifiTokenEl?.addEventListener("change", () => {
+    localStorage.setItem(controlPlaneTokenStorageKey, (wifiTokenEl.value || "").trim());
+  });
   backupCurrentButtonEl?.addEventListener("click", saveCurrentImage);
+
+  hydrateTokenInput();
+  renderKnownWifiOptions();
+  loadKnownWifiNetworks({ showStatus: false });
   loadBackupStatus();
+
+  function hydrateTokenInput() {
+    if (!wifiTokenEl) {
+      return;
+    }
+    const saved = localStorage.getItem(controlPlaneTokenStorageKey) || "";
+    wifiTokenEl.value = saved;
+  }
+
+  function getControlPlaneToken() {
+    return (wifiTokenEl?.value || "").trim();
+  }
+
+  function getAuthHeaders() {
+    const token = getControlPlaneToken();
+    if (!token) {
+      return {};
+    }
+    return {
+      "x-control-plane-key": token
+    };
+  }
+
+  function renderKnownWifiOptions() {
+    if (!knownWifiSelectEl) {
+      return;
+    }
+
+    knownWifiSelectEl.innerHTML = "";
+    if (!knownNetworks.length) {
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = "No known Wi-Fi loaded";
+      knownWifiSelectEl.appendChild(option);
+      return;
+    }
+
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "Select a known network";
+    knownWifiSelectEl.appendChild(placeholder);
+
+    for (const network of knownNetworks) {
+      const option = document.createElement("option");
+      option.value = network.id;
+      option.textContent = `${network.label} (${network.ssid})`;
+      knownWifiSelectEl.appendChild(option);
+    }
+  }
+
+  async function loadKnownWifiNetworks({ showStatus }) {
+    if (!knownWifiSelectEl) {
+      return;
+    }
+
+    if (showStatus && wifiProvisionStatusEl) {
+      wifiProvisionStatusEl.textContent = "Loading known Wi-Fi from server...";
+    }
+
+    try {
+      const response = await fetch("./api/wifi/known", {
+        cache: "no-store",
+        headers: getAuthHeaders()
+      });
+
+      if (response.status === 401) {
+        throw new Error("Unauthorized. Enter control plane token, then Load again.");
+      }
+      if (!response.ok) {
+        throw new Error(`Known Wi-Fi fetch failed (${response.status})`);
+      }
+
+      const payload = await response.json();
+      knownNetworks = Array.isArray(payload?.networks) ? payload.networks : [];
+      renderKnownWifiOptions();
+
+      if (wifiProvisionStatusEl && showStatus) {
+        wifiProvisionStatusEl.textContent = knownNetworks.length
+          ? `Loaded ${knownNetworks.length} known network(s).`
+          : "Known Wi-Fi list is empty.";
+      }
+    } catch (error) {
+      knownNetworks = [];
+      renderKnownWifiOptions();
+      if (wifiProvisionStatusEl && showStatus) {
+        wifiProvisionStatusEl.textContent = `Known Wi-Fi unavailable: ${String(error.message || error)}`;
+      }
+    }
+  }
+
+  function applySelectedKnownWifi() {
+    if (!knownWifiSelectEl || !wifiSsidEl || !wifiPasswordEl || !wifiProvisionStatusEl) {
+      return;
+    }
+
+    const selectedId = knownWifiSelectEl.value;
+    if (!selectedId) {
+      wifiProvisionStatusEl.textContent = "Select a known network first.";
+      return;
+    }
+
+    const selected = knownNetworks.find((entry) => entry.id === selectedId);
+    if (!selected) {
+      wifiProvisionStatusEl.textContent = "Selected network is no longer available.";
+      return;
+    }
+
+    wifiSsidEl.value = selected.ssid || "";
+    wifiPasswordEl.value = selected.password || "";
+    wifiProvisionStatusEl.textContent = `Applied known network: ${selected.label || selected.ssid}`;
+  }
 
   function initializeGroup(groupPackages, selectEl, metaEl, variantListEl, emptyMessage) {
     if (!groupPackages.length) {

@@ -1,0 +1,21 @@
+# Prevent local secrets from entering Docker build context
+config/config.json
+config/.env
+config/unraid_key
+config/unraid_key.*
+config/id_rsa
+config/id_rsa.*
+config/id_ed25519
+config/id_ed25519.*
+.ssh/
+
+# Local env and logs
+.env
+*.env
+*.log
+
+# VCS and local tooling
+.git/
+.venv/
+node_modules/
+**/node_modules/
