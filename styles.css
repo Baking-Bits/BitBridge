@@ -2,6 +2,19 @@
   max-width: 980px;
 }
 
+#installContainer esp-web-install-button {
+  display: inline-block;
+}
+
+#firmwareMeta {
+  line-height: 1.5;
+}
+
+#selectionTable td,
+#selectionTable th {
+  white-space: nowrap;
+}
+
 .variant-card {
   border: 1px solid #e9ecef;
   border-radius: 0.75rem;

@@ -48,34 +48,49 @@
 
     <form id="loginForm">
       <div class="mb-3">
-        <label for="tokenInput" class="form-label fw-semibold">Access Token</label>
+        <label for="usernameInput" class="form-label fw-semibold">Username</label>
         <input
-          id="tokenInput"
+          id="usernameInput"
+          type="text"
+          class="form-control"
+          placeholder="admin"
+          autocomplete="username"
+          autofocus
+        />
+      </div>
+      <div class="mb-3">
+        <label for="passwordInput" class="form-label fw-semibold">Password</label>
+        <input
+          id="passwordInput"
           type="password"
           class="form-control"
-          placeholder="Enter your control plane token"
+          placeholder="Enter password"
           autocomplete="current-password"
-          autofocus
         />
       </div>
       <div id="loginError" class="text-danger small mb-2" style="display:none;"></div>
       <button type="submit" class="btn btn-primary w-100">Sign In</button>
+      <div class="small text-muted mt-3">
+        Default bootstrap account: <strong>admin</strong> / <strong>pass1234</strong> (change it immediately after login).
+      </div>
     </form>
   </div>
 
   <script>
     (function () {
       const form = document.getElementById("loginForm");
-      const tokenInput = document.getElementById("tokenInput");
+      const usernameInput = document.getElementById("usernameInput");
+      const passwordInput = document.getElementById("passwordInput");
       const errorEl = document.getElementById("loginError");
 
       form.addEventListener("submit", async function (e) {
         e.preventDefault();
         errorEl.style.display = "none";
 
-        const token = (tokenInput.value || "").trim();
-        if (!token) {
-          errorEl.textContent = "Enter your access token.";
+        const username = (usernameInput.value || "").trim();
+        const password = passwordInput.value || "";
+        if (!username || !password) {
+          errorEl.textContent = "Enter username and password.";
           errorEl.style.display = "";
           return;
         }
@@ -84,20 +99,20 @@
           const res = await fetch("/api/auth/login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ token }),
+            body: JSON.stringify({ username, password }),
             credentials: "same-origin"
           });
 
           const data = await res.json().catch(() => ({}));
 
           if (res.ok && data.ok) {
-            const redirect = new URLSearchParams(window.location.search).get("next") || "/";
+            const redirect = new URLSearchParams(window.location.search).get("next") || "/admin";
             window.location.replace(redirect);
           } else {
-            errorEl.textContent = data.error || "Invalid token.";
+            errorEl.textContent = data.error || "Invalid username or password.";
             errorEl.style.display = "";
-            tokenInput.value = "";
-            tokenInput.focus();
+            passwordInput.value = "";
+            passwordInput.focus();
           }
         } catch {
           errorEl.textContent = "Network error — try again.";

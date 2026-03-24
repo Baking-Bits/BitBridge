@@ -8,7 +8,9 @@ RUN npm install --omit=dev
 COPY ESPControlPlane/src ./src
 COPY index.html /app/index.html
 COPY login.html /app/login.html
+COPY admin.html /app/admin.html
 COPY app.js /app/app.js
+COPY admin.js /app/admin.js
 COPY styles.css /app/styles.css
 COPY devices.config.js /app/devices.config.js
 COPY packages /app/packages

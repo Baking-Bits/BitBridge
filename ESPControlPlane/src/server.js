@@ -6,6 +6,21 @@ import { config, hasUnraidConfig } from "./config.js";
 import { getContainerStatus, restartContainer, startContainer } from "./unraid.js";
 import { fetchJellyfinStatus, fetchJellyseerrStatus } from "./services.js";
 import { signSession, verifySession, COOKIE_NAME } from "./auth.js";
+import {
+  authenticateUser,
+  changeUserPassword,
+  ensureDbReady,
+  getUserById,
+  listDeviceSelections,
+  logDeviceSelection,
+  listDevices,
+  getDeviceById,
+  registerDevice,
+  updateDevice,
+  deleteDevice,
+  logDeviceCheckin,
+  getDeviceCheckins
+} from "./db.js";
 
 const app = express();
 
@@ -34,46 +49,73 @@ app.use((req, res, next) => {
 });
 
 function isSessionValid(req) {
-  if (!config.server.token) {
-    return true;
-  }
+  const secret = getSessionSecret();
   const sessionCookie = req.cookies?.[COOKIE_NAME];
-  if (sessionCookie && verifySession(sessionCookie, config.server.token)) {
-    return true;
+  if (!sessionCookie) {
+    return null;
   }
-  // Also accept direct token header for non-browser API clients
-  return req.get("x-control-plane-key") === config.server.token;
+
+  const payload = verifySession(sessionCookie, secret);
+  if (!payload || !payload.sub) {
+    return null;
+  }
+
+  return {
+    id: Number(payload.sub),
+    username: payload.username || "",
+    role: payload.role || "admin"
+  };
 }
 
-const AUTH_EXEMPT = new Set(["/health", "/login", "/api/auth/login", "/api/auth/logout"]);
-
-function requireSession(req, res, next) {
-  if (!config.server.token) {
-    return next();
-  }
-  if (AUTH_EXEMPT.has(req.path)) {
-    return next();
-  }
-  if (isSessionValid(req)) {
-    return next();
-  }
-  if (req.path.startsWith("/api/")) {
-    return res.status(401).json({ ok: false, error: "unauthorized" });
-  }
-  const nextParam = encodeURIComponent(req.originalUrl);
-  return res.redirect(`/login?next=${nextParam}`);
+function getSessionSecret() {
+  return config.server.token || "bitbridge-dev-session-secret";
 }
 
-app.use(requireSession);
+async function requireSession(req, res, next) {
+  try {
+    const sessionUser = isSessionValid(req);
+    if (!sessionUser) {
+      if (req.path.startsWith("/api/")) {
+        return res.status(401).json({ ok: false, error: "unauthorized" });
+      }
+      const nextParam = encodeURIComponent(req.originalUrl);
+      return res.redirect(`/login?next=${nextParam}`);
+    }
+
+    const dbUser = await getUserById(sessionUser.id);
+    if (!dbUser) {
+      res.clearCookie(COOKIE_NAME);
+      if (req.path.startsWith("/api/")) {
+        return res.status(401).json({ ok: false, error: "unauthorized" });
+      }
+      const nextParam = encodeURIComponent(req.originalUrl);
+      return res.redirect(`/login?next=${nextParam}`);
+    }
+
+    req.sessionUser = dbUser;
+    if (dbUser.mustChangePassword && req.path.startsWith("/api/admin/") && req.path !== "/api/auth/change-password") {
+      return res.status(403).json({ ok: false, error: "password_change_required" });
+    }
+
+    if (dbUser.mustChangePassword && req.path === "/admin") {
+      req.mustChangePassword = true;
+    }
+
+    if (dbUser.mustChangePassword && req.path === "/admin.html") {
+      req.mustChangePassword = true;
+    }
+
+    return next();
+  } catch (error) {
+    return next(error);
+  }
+}
 
 function isAuthorized(req) {
-  if (!config.server.token) {
+  if (req.sessionUser) {
     return true;
   }
-
-  const headerToken = req.get("x-control-plane-key");
-  const bodyToken = typeof req.body?.token === "string" ? req.body.token : "";
-  return headerToken === config.server.token || bodyToken === config.server.token;
+  return Boolean(isSessionValid(req));
 }
 
 function serviceMap(service) {
@@ -130,24 +172,120 @@ app.get("/login", (_req, res) => {
   res.sendFile(loginPath);
 });
 
-app.post("/api/auth/login", (req, res) => {
-  if (!config.server.token) {
-    res.status(200).json({ ok: true, message: "auth disabled" });
+app.get("/admin", requireSession, (_req, res) => {
+  const adminPath = path.join(config.server.staticRoot, "admin.html");
+  if (!fs.existsSync(adminPath)) {
+    res.status(404).send("admin.html not found");
     return;
   }
-  const bodyToken = typeof req.body?.token === "string" ? req.body.token.trim() : "";
-  if (!bodyToken || bodyToken !== config.server.token) {
-    res.status(401).json({ ok: false, error: "Invalid token." });
+  res.sendFile(adminPath);
+});
+
+app.get("/admin.html", requireSession, (_req, res) => {
+  const adminPath = path.join(config.server.staticRoot, "admin.html");
+  if (!fs.existsSync(adminPath)) {
+    res.status(404).send("admin.html not found");
     return;
   }
-  const sessionJwt = signSession(config.server.token);
-  res.cookie(COOKIE_NAME, sessionJwt, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: req.secure || req.get("x-forwarded-proto") === "https",
-    maxAge: 8 * 60 * 60 * 1000
+  res.sendFile(adminPath);
+});
+
+app.get("/admin.js", requireSession, (_req, res) => {
+  const adminScriptPath = path.join(config.server.staticRoot, "admin.js");
+  if (!fs.existsSync(adminScriptPath)) {
+    res.status(404).send("admin.js not found");
+    return;
+  }
+  res.sendFile(adminScriptPath);
+});
+
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    const username = typeof req.body?.username === "string" ? req.body.username : "";
+    const password = typeof req.body?.password === "string" ? req.body.password : "";
+    const result = await authenticateUser(username, password);
+
+    if (!result.ok || !result.user) {
+      if (result.reason === "db_unavailable") {
+        res.status(503).json({ ok: false, error: "Database unavailable." });
+        return;
+      }
+      res.status(401).json({ ok: false, error: "Invalid username or password." });
+      return;
+    }
+
+    const sessionJwt = signSession(getSessionSecret(), result.user);
+    res.cookie(COOKIE_NAME, sessionJwt, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: req.secure || req.get("x-forwarded-proto") === "https",
+      maxAge: 8 * 60 * 60 * 1000
+    });
+    res.status(200).json({
+      ok: true,
+      user: {
+        id: result.user.id,
+        username: result.user.username,
+        role: result.user.role,
+        mustChangePassword: result.user.mustChangePassword
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error.message || error) });
+  }
+});
+
+app.get("/api/auth/me", requireSession, (req, res) => {
+  const user = req.sessionUser;
+  res.status(200).json({
+    ok: true,
+    user: {
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      mustChangePassword: Boolean(user.mustChangePassword)
+    }
   });
-  res.status(200).json({ ok: true });
+});
+
+app.post("/api/auth/change-password", requireSession, async (req, res) => {
+  try {
+    const currentPassword = typeof req.body?.currentPassword === "string" ? req.body.currentPassword : "";
+    const newPassword = typeof req.body?.newPassword === "string" ? req.body.newPassword : "";
+
+    const result = await changeUserPassword(req.sessionUser.id, currentPassword, newPassword);
+    if (!result.ok) {
+      if (result.reason === "invalid_current_password") {
+        res.status(400).json({ ok: false, error: "Current password is incorrect." });
+        return;
+      }
+      if (result.reason === "password_too_short") {
+        res.status(400).json({ ok: false, error: "New password must be at least 8 characters." });
+        return;
+      }
+      res.status(400).json({ ok: false, error: "Unable to change password." });
+      return;
+    }
+
+    const freshUser = await getUserById(req.sessionUser.id);
+    if (!freshUser) {
+      res.clearCookie(COOKIE_NAME);
+      res.status(401).json({ ok: false, error: "Session expired. Please sign in again." });
+      return;
+    }
+
+    const sessionJwt = signSession(getSessionSecret(), freshUser);
+    res.cookie(COOKIE_NAME, sessionJwt, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: req.secure || req.get("x-forwarded-proto") === "https",
+      maxAge: 8 * 60 * 60 * 1000
+    });
+
+    res.status(200).json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error.message || error) });
+  }
 });
 
 app.get("/api/auth/logout", (_req, res) => {
@@ -155,7 +293,224 @@ app.get("/api/auth/logout", (_req, res) => {
   res.redirect("/login");
 });
 
-app.get("/api/status/:service", async (req, res) => {
+app.post("/api/public/device-selection", async (req, res) => {
+  try {
+    const deviceGroup = typeof req.body?.deviceGroup === "string" ? req.body.deviceGroup : "";
+    const deviceLabel = typeof req.body?.deviceLabel === "string" ? req.body.deviceLabel : "";
+    const packageId = typeof req.body?.packageId === "string" ? req.body.packageId : "";
+    const firmwareId = typeof req.body?.firmwareId === "string" ? req.body.firmwareId : "";
+    const firmwareLabel = typeof req.body?.firmwareLabel === "string" ? req.body.firmwareLabel : "";
+    const manifestPath = typeof req.body?.manifestPath === "string" ? req.body.manifestPath : "";
+    const ipAddress = (req.get("x-forwarded-for") || req.socket.remoteAddress || "").split(",")[0].trim();
+    const userAgent = req.get("user-agent") || "";
+
+    if (!deviceGroup || !packageId || !firmwareId) {
+      res.status(400).json({ ok: false, error: "missing required device/firmware fields" });
+      return;
+    }
+
+    const saveResult = await logDeviceSelection({
+      deviceGroup,
+      deviceLabel,
+      packageId,
+      firmwareId,
+      firmwareLabel,
+      manifestPath,
+      ipAddress,
+      userAgent
+    });
+
+    res.status(200).json({ ok: true, saved: saveResult.saved });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error.message || error) });
+  }
+});
+
+app.post("/api/public/devices/register", async (req, res) => {
+  try {
+    const deviceGroup = typeof req.body?.deviceGroup === "string" ? req.body.deviceGroup : "";
+    const deviceLabel = typeof req.body?.deviceLabel === "string" ? req.body.deviceLabel : "";
+    const serialNumber = typeof req.body?.serialNumber === "string" ? req.body.serialNumber : "";
+    const initialFirmwareVersion = typeof req.body?.initialFirmwareVersion === "string" ? req.body.initialFirmwareVersion : "";
+
+    if (!deviceGroup || !serialNumber) {
+      res.status(400).json({ ok: false, error: "deviceGroup and serialNumber are required" });
+      return;
+    }
+
+    const result = await registerDevice(deviceGroup, deviceLabel, serialNumber, initialFirmwareVersion);
+    if (!result.ok) {
+      if (result.reason === "device_already_registered") {
+        res.status(409).json({ ok: false, error: "Device with this serial number already exists." });
+        return;
+      }
+      res.status(400).json({ ok: false, error: "Failed to register device." });
+      return;
+    }
+
+    const device = await getDeviceById(result.deviceId);
+    res.status(201).json({ ok: true, device });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error.message || error) });
+  }
+});
+
+app.post("/api/public/devices/:id/checkin", async (req, res) => {
+  try {
+    const deviceId = req.params.id;
+    const firmwareVersion = typeof req.body?.firmwareVersion === "string" ? req.body.firmwareVersion : "";
+    const status = typeof req.body?.status === "string" ? req.body.status : "ok";
+    const data = typeof req.body?.data === "object" ? req.body.data : null;
+
+    if (!firmwareVersion) {
+      res.status(400).json({ ok: false, error: "firmwareVersion is required" });
+      return;
+    }
+
+    const result = await logDeviceCheckin(deviceId, firmwareVersion, status, data);
+    if (!result.ok) {
+      if (result.reason === "device_not_found") {
+        res.status(404).json({ ok: false, error: "Device not found." });
+        return;
+      }
+      res.status(400).json({ ok: false, error: "Failed to log check-in." });
+      return;
+    }
+
+    res.status(200).json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error.message || error) });
+  }
+});
+
+app.get("/api/admin/device-selections", requireSession, async (req, res) => {
+  try {
+    const limitRaw = Number.parseInt(String(req.query.limit || "100"), 10);
+    const limit = Number.isFinite(limitRaw) ? limitRaw : 100;
+    const selections = await listDeviceSelections(limit);
+    res.status(200).json({ ok: true, selections });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error.message || error) });
+  }
+});
+
+app.get("/api/admin/devices", requireSession, async (req, res) => {
+  try {
+    const devices = await listDevices();
+    res.status(200).json({ ok: true, devices });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error.message || error) });
+  }
+});
+
+app.get("/api/admin/devices/:id", requireSession, async (req, res) => {
+  try {
+    const deviceId = req.params.id;
+    const device = await getDeviceById(deviceId);
+    if (!device) {
+      res.status(404).json({ ok: false, error: "device not found" });
+      return;
+    }
+    res.status(200).json({ ok: true, device });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error.message || error) });
+  }
+});
+
+app.post("/api/admin/devices", requireSession, async (req, res) => {
+  try {
+    const deviceGroup = typeof req.body?.deviceGroup === "string" ? req.body.deviceGroup : "";
+    const deviceLabel = typeof req.body?.deviceLabel === "string" ? req.body.deviceLabel : "";
+    const serialNumber = typeof req.body?.serialNumber === "string" ? req.body.serialNumber : "";
+    const initialFirmwareVersion = typeof req.body?.initialFirmwareVersion === "string" ? req.body.initialFirmwareVersion : "";
+
+    if (!deviceGroup || !serialNumber) {
+      res.status(400).json({ ok: false, error: "deviceGroup and serialNumber are required" });
+      return;
+    }
+
+    const result = await registerDevice(deviceGroup, deviceLabel, serialNumber, initialFirmwareVersion);
+    if (!result.ok) {
+      if (result.reason === "device_already_registered") {
+        res.status(409).json({ ok: false, error: "Device with this serial number already exists." });
+        return;
+      }
+      res.status(400).json({ ok: false, error: "Failed to register device." });
+      return;
+    }
+
+    const device = await getDeviceById(result.deviceId);
+    res.status(201).json({ ok: true, device });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error.message || error) });
+  }
+});
+
+app.patch("/api/admin/devices/:id", requireSession, async (req, res) => {
+  try {
+    const deviceId = req.params.id;
+    const updates = {};
+
+    if (typeof req.body?.deviceLabel === "string") {
+      updates.deviceLabel = req.body.deviceLabel;
+    }
+    if (typeof req.body?.firmwareVersion === "string") {
+      updates.firmwareVersion = req.body.firmwareVersion;
+    }
+    if (typeof req.body?.lastCheckin === "string" || req.body?.lastCheckin instanceof Date) {
+      updates.lastCheckin = req.body.lastCheckin;
+    }
+
+    const result = await updateDevice(deviceId, updates);
+    if (!result.ok) {
+      if (result.reason === "no_updates") {
+        res.status(400).json({ ok: false, error: "No valid updates provided." });
+        return;
+      }
+      res.status(400).json({ ok: false, error: "Failed to update device." });
+      return;
+    }
+
+    const device = await getDeviceById(deviceId);
+    if (!device) {
+      res.status(404).json({ ok: false, error: "device not found after update" });
+      return;
+    }
+
+    res.status(200).json({ ok: true, device });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error.message || error) });
+  }
+});
+
+app.delete("/api/admin/devices/:id", requireSession, async (req, res) => {
+  try {
+    const deviceId = req.params.id;
+    const result = await deleteDevice(deviceId);
+    if (!result.ok) {
+      res.status(404).json({ ok: false, error: "device not found" });
+      return;
+    }
+    res.status(200).json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error.message || error) });
+  }
+});
+
+app.get("/api/admin/devices/:id/checkins", requireSession, async (req, res) => {
+  try {
+    const deviceId = req.params.id;
+    const limitRaw = Number.parseInt(String(req.query.limit || "100"), 10);
+    const limit = Number.isFinite(limitRaw) ? limitRaw : 100;
+
+    const checkins = await getDeviceCheckins(deviceId, limit);
+    res.status(200).json({ ok: true, checkins });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error.message || error) });
+  }
+});
+
+app.get("/api/status/:service", requireSession, async (req, res) => {
   const service = req.params.service;
   const status = await buildServiceStatus(service);
 
@@ -167,7 +522,7 @@ app.get("/api/status/:service", async (req, res) => {
   res.status(200).json({ ok: true, ...status });
 });
 
-app.get("/api/status", async (_req, res) => {
+app.get("/api/status", requireSession, async (_req, res) => {
   try {
     const [jellyfin, jellyseerr] = await Promise.all([
       buildServiceStatus("jellyfin"),
@@ -186,7 +541,7 @@ app.get("/api/status", async (_req, res) => {
   }
 });
 
-app.get("/api/wifi/known", (req, res) => {
+app.get("/api/wifi/known", requireSession, (req, res) => {
   if (!isAuthorized(req)) {
     res.status(401).json({ ok: false, error: "unauthorized" });
     return;
@@ -199,7 +554,7 @@ app.get("/api/wifi/known", (req, res) => {
   });
 });
 
-app.post("/api/:action/:service", async (req, res) => {
+app.post("/api/:action/:service", requireSession, async (req, res) => {
   const action = req.params.action;
   const service = req.params.service;
 
@@ -265,6 +620,9 @@ function checkStartupPaths() {
 }
 
 checkStartupPaths();
+ensureDbReady().catch((error) => {
+  console.warn(`DB startup initialization failed: ${String(error.message || error)}`);
+});
 
 app.use("/packages", express.static(path.join(config.server.staticRoot, "packages")));
 app.use("/bin", express.static(path.join(config.server.staticRoot, "bin")));
@@ -283,9 +641,8 @@ app.listen(config.server.port, config.server.host, () => {
   console.log(`ESP Control Plane listening on http://${config.server.host}:${config.server.port}`);
   console.log(`Server bind: host=${config.server.host} port=${config.server.port}`);
   console.log(`Static root: ${config.server.staticRoot}`);
-  if (config.server.token) {
-    console.log("Action auth enabled (x-control-plane-key)");
-  } else {
-    console.log("Action auth disabled (set CONTROL_PLANE_TOKEN to secure action routes)");
+  console.log("Admin auth enabled (DB accounts + session cookie)");
+  if (!config.server.token) {
+    console.warn("Startup warning: server.token is empty; using fallback session secret. Set server.token for secure signed sessions.");
   }
 });

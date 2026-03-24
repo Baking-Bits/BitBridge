@@ -1,4 +1,170 @@
 (async function () {
+  const deviceSelectEl = document.getElementById("deviceSelect");
+  const firmwareSelectEl = document.getElementById("firmwareSelect");
+  const firmwareMetaEl = document.getElementById("firmwareMeta");
+  const installContainerEl = document.getElementById("installContainer");
+  const publicStatusEl = document.getElementById("publicStatus");
+  const firmwareLinksEl = document.getElementById("firmwareLinks");
+
+  if (deviceSelectEl && firmwareSelectEl && firmwareMetaEl && installContainerEl && publicStatusEl && firmwareLinksEl) {
+    let packages = [];
+    let currentDeviceGroup = "";
+    let firmwareOptions = [];
+    let lastTrackedSelection = "";
+
+    const deviceGroupLabels = {
+      cyd: "CYD — ESP32-2432S028R",
+      s3: "ESP32-S3 — 2.8\" IPS Touch",
+      original: "Original / Reference Targets"
+    };
+
+    try {
+      const response = await fetch("./packages/catalog.json", { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`Could not load package catalog (${response.status})`);
+      }
+      packages = await response.json();
+    } catch (error) {
+      deviceSelectEl.innerHTML = "<option>Catalog load failed</option>";
+      firmwareSelectEl.innerHTML = "<option>Catalog load failed</option>";
+      publicStatusEl.textContent = String(error.message || error);
+      return;
+    }
+
+    if (!Array.isArray(packages) || packages.length === 0) {
+      deviceSelectEl.innerHTML = "<option>No devices configured</option>";
+      firmwareSelectEl.innerHTML = "<option>No firmware configured</option>";
+      publicStatusEl.textContent = "No package entries found in packages/catalog.json";
+      return;
+    }
+
+    renderDeviceOptions();
+    deviceSelectEl.addEventListener("change", onDeviceChange);
+    firmwareSelectEl.addEventListener("change", onFirmwareChange);
+    onDeviceChange();
+    return;
+
+    function renderDeviceOptions() {
+      const groups = [...new Set(packages.map((entry) => entry.group).filter(Boolean))];
+      deviceSelectEl.innerHTML = "";
+
+      for (const group of groups) {
+        const option = document.createElement("option");
+        option.value = group;
+        option.textContent = deviceGroupLabels[group] || group.toUpperCase();
+        deviceSelectEl.appendChild(option);
+      }
+
+      currentDeviceGroup = groups[0] || "";
+      deviceSelectEl.value = currentDeviceGroup;
+    }
+
+    function onDeviceChange() {
+      currentDeviceGroup = deviceSelectEl.value;
+
+      const scopedPackages = packages.filter((entry) => entry.group === currentDeviceGroup);
+      firmwareOptions = scopedPackages.flatMap((pkg) => {
+        const variants = Array.isArray(pkg.variants) ? pkg.variants : [];
+        return variants.map((variant) => ({
+          key: `${pkg.id}::${variant.id}`,
+          packageId: pkg.id,
+          packageName: pkg.name,
+          boardHint: pkg.boardHint || "",
+          docsUrl: pkg.docsUrl || "",
+          repoUrl: variant.repoUrl || "",
+          guideUrl: variant.guideUrl || "",
+          firmwareId: variant.id,
+          firmwareLabel: variant.label,
+          notes: variant.notes || "",
+          buildLabel: variant.buildLabel || "",
+          manifest: variant.manifest || ""
+        }));
+      });
+
+      firmwareSelectEl.innerHTML = "";
+      if (!firmwareOptions.length) {
+        const emptyOption = document.createElement("option");
+        emptyOption.value = "";
+        emptyOption.textContent = "No firmware available for this device";
+        firmwareSelectEl.appendChild(emptyOption);
+      } else {
+        for (const optionData of firmwareOptions) {
+          const option = document.createElement("option");
+          option.value = optionData.key;
+          option.textContent = `${optionData.packageName} — ${optionData.firmwareLabel}`;
+          firmwareSelectEl.appendChild(option);
+        }
+      }
+
+      onFirmwareChange();
+    }
+
+    function onFirmwareChange() {
+      const selected = firmwareOptions.find((entry) => entry.key === firmwareSelectEl.value) || firmwareOptions[0];
+      if (!selected) {
+        firmwareMetaEl.textContent = "No firmware selected.";
+        installContainerEl.innerHTML = "";
+        firmwareLinksEl.innerHTML = "";
+        publicStatusEl.textContent = "Select a device to continue.";
+        return;
+      }
+
+      firmwareSelectEl.value = selected.key;
+      firmwareMetaEl.textContent = [selected.boardHint, selected.buildLabel, selected.notes].filter(Boolean).join(" · ");
+
+      installContainerEl.innerHTML = "";
+      if (selected.manifest) {
+        const installButton = document.createElement("esp-web-install-button");
+        installButton.setAttribute("manifest", selected.manifest);
+        installContainerEl.appendChild(installButton);
+        publicStatusEl.textContent = "Firmware ready. Connect device and click Install.";
+      } else {
+        publicStatusEl.textContent = "Selected firmware has no manifest yet.";
+      }
+
+      firmwareLinksEl.innerHTML = "";
+      addOptionalLink(selected.docsUrl, "Project docs");
+      addOptionalLink(selected.repoUrl, "Source repo");
+      addOptionalLink(selected.guideUrl, "Build guide");
+
+      trackSelection(selected).catch(() => {});
+    }
+
+    function addOptionalLink(href, label) {
+      if (!href) {
+        return;
+      }
+      const link = document.createElement("a");
+      link.href = href;
+      link.target = "_blank";
+      link.rel = "noopener";
+      link.className = "btn btn-outline-secondary btn-sm";
+      link.textContent = label;
+      firmwareLinksEl.appendChild(link);
+    }
+
+    async function trackSelection(selected) {
+      const trackKey = `${selected.key}:${currentDeviceGroup}`;
+      if (trackKey === lastTrackedSelection) {
+        return;
+      }
+
+      lastTrackedSelection = trackKey;
+      await fetch("./api/public/device-selection", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deviceGroup: currentDeviceGroup,
+          deviceLabel: deviceGroupLabels[currentDeviceGroup] || currentDeviceGroup,
+          packageId: selected.packageId,
+          firmwareId: selected.firmwareId,
+          firmwareLabel: selected.firmwareLabel,
+          manifestPath: selected.manifest
+        })
+      });
+    }
+  }
+
   const cydSelectEl = document.getElementById("cydSelect");
   const cydMetaEl = document.getElementById("cydMeta");
   const cydVariantListEl = document.getElementById("cydVariantList");

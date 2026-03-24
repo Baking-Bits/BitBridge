@@ -4,10 +4,19 @@ const COOKIE_NAME = "bcp_session";
 const TOKEN_EXPIRY = "8h";
 
 /**
- * Signs a new session JWT using the control plane token as the secret.
+ * Signs a new session JWT for an authenticated DB user.
  */
-export function signSession(secret) {
-  return jwt.sign({ auth: true }, secret, { expiresIn: TOKEN_EXPIRY });
+export function signSession(secret, user) {
+  return jwt.sign(
+    {
+      auth: true,
+      sub: String(user.id),
+      username: user.username,
+      role: user.role || "admin"
+    },
+    secret,
+    { expiresIn: TOKEN_EXPIRY }
+  );
 }
 
 /**

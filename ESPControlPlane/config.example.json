@@ -27,6 +27,13 @@
     "baseUrl": "",
     "apiKey": ""
   },
+  "db": {
+    "host": "",
+    "port": 3306,
+    "user": "",
+    "password": "",
+    "name": "BitBridge"
+  },
   "unraid": {
     "host": "",
     "port": 22,

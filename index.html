@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ESP32 Firmware Installer</title>
+  <title>BitBridge Firmware Installer</title>
   <link
     href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
     rel="stylesheet"
@@ -14,100 +14,41 @@
 <body>
   <nav class="navbar navbar-expand-lg navbar-light bg-light border-bottom">
     <div class="container">
-      <a class="navbar-brand" href="#">ESP32 Firmware Installer</a>
+      <a class="navbar-brand" href="#">BitBridge Firmware Installer</a>
+      <a href="/login" class="btn btn-outline-secondary btn-sm">Admin Login</a>
     </div>
   </nav>
 
   <main class="container my-5 installer-wrap">
     <div class="row justify-content-center">
-      <div class="col-lg-9">
-        <h1 class="h3 mb-3">Local ESP32 firmware installer</h1>
+      <div class="col-lg-8">
+        <h1 class="h3 mb-3">Select your device and firmware</h1>
         <p class="text-muted mb-4">
-          This page is served locally with local firmware packages. Works in Chrome and Edge.
+          Public installer page for flashing ESP32 firmware. Use Chrome or Edge for Web Serial support.
         </p>
 
         <div class="card mb-4">
-          <div class="card-header fw-semibold">CYD &mdash; ESP32-2432S028R (2.8" Resistive Touch)</div>
           <div class="card-body">
-            <label for="cydSelect" class="form-label">Select firmware</label>
-            <select id="cydSelect" class="form-select mb-3"></select>
-            <div id="cydMeta" class="small text-muted"></div>
-            <div id="cydVariantList" class="vstack gap-3 mt-3"></div>
-          </div>
-        </div>
+            <div class="row g-3">
+              <div class="col-12">
+                <label for="deviceSelect" class="form-label fw-semibold">1) Select device</label>
+                <select id="deviceSelect" class="form-select"></select>
+              </div>
+              <div class="col-12">
+                <label for="firmwareSelect" class="form-label fw-semibold">2) Select firmware</label>
+                <select id="firmwareSelect" class="form-select"></select>
+              </div>
+            </div>
 
-        <div class="card mb-4">
-          <div class="card-header fw-semibold">ESP32-S3 &mdash; 2.8" IPS 240&times;320 Capacitive Touch (ES3C28P / ES3N28P)</div>
-          <div class="card-body">
-            <label for="s3Select" class="form-label">Select firmware</label>
-            <select id="s3Select" class="form-select mb-3"></select>
-            <div id="s3Meta" class="small text-muted"></div>
-            <div id="s3VariantList" class="vstack gap-3 mt-3"></div>
-          </div>
-        </div>
+            <div id="firmwareMeta" class="small text-muted mt-3"></div>
 
-        <div class="card mb-4">
-          <div class="card-body">
-            <h2 class="h5">Wi-Fi prefill (Aura builds)</h2>
-            <p class="text-muted mb-3">
-              Enter Wi-Fi details here, flash firmware, then send them over USB so Aura boots already configured.
-            </p>
-            <div class="row g-2 mb-3">
-              <div class="col-md-6">
-                <label for="wifiToken" class="form-label">Control Plane Token (optional)</label>
-                <input id="wifiToken" type="password" class="form-control" autocomplete="off" placeholder="x-control-plane-key" />
-              </div>
-              <div class="col-md-6">
-                <label for="knownWifiSelect" class="form-label">Known Wi-Fi from server</label>
-                <div class="d-flex gap-2">
-                  <select id="knownWifiSelect" class="form-select">
-                    <option value="">No known Wi-Fi loaded</option>
-                  </select>
-                  <button id="loadKnownWifiButton" type="button" class="btn btn-outline-secondary btn-sm">Load</button>
-                  <button id="applyKnownWifiButton" type="button" class="btn btn-outline-primary btn-sm">Use</button>
-                </div>
-              </div>
-            </div>
-            <div class="row g-2">
-              <div class="col-md-6">
-                <label for="wifiSsid" class="form-label">Wi-Fi SSID</label>
-                <input id="wifiSsid" type="text" class="form-control" autocomplete="username" />
-              </div>
-              <div class="col-md-6">
-                <label for="wifiPassword" class="form-label">Wi-Fi Password</label>
-                <input id="wifiPassword" type="password" class="form-control" autocomplete="current-password" />
-              </div>
-            </div>
-            <div class="mt-3 d-flex flex-wrap gap-2 align-items-center">
-              <button id="sendWifiButton" type="button" class="btn btn-primary btn-sm">Send Wi-Fi to ESP32</button>
-              <span id="wifiProvisionStatus" class="small text-muted">Ready</span>
-            </div>
-          </div>
-        </div>
+            <div id="installContainer" class="mt-3"></div>
+            <div id="publicStatus" class="small text-muted mt-2">Ready</div>
 
-        <div class="card mb-4">
-          <div class="card-body">
-            <h2 class="h5">Save current image from device</h2>
-            <p class="text-muted mb-3">
-              Reads the entire ESP32-S3 flash and stores it in <code>packages/factory-s3/factory-full-8mb.bin</code> so you can reinstall later from this same site.
-            </p>
-            <div class="row g-2">
-              <div class="col-md-4">
-                <label for="backupPort" class="form-label">Serial Port</label>
-                <input id="backupPort" type="text" class="form-control" value="COM3" />
-              </div>
-              <div class="col-md-4">
-                <label for="backupChip" class="form-label">Chip</label>
-                <input id="backupChip" type="text" class="form-control" value="esp32s3" />
-              </div>
-              <div class="col-md-4">
-                <label for="backupBaud" class="form-label">Baud</label>
-                <input id="backupBaud" type="number" class="form-control" value="460800" />
-              </div>
-            </div>
-            <div class="mt-3 d-flex flex-wrap gap-2 align-items-center">
-              <button id="backupCurrentButton" type="button" class="btn btn-warning btn-sm">Save Current Image</button>
-              <span id="backupStatus" class="small text-muted">Ready</span>
+            <div id="firmwareLinks" class="d-flex flex-wrap gap-2 mt-3"></div>
+
+            <div class="alert alert-light border mt-4 mb-0 small">
+              Admin features (device management and password reset) are available via Admin Login and will expand over upcoming builds.
             </div>
           </div>
         </div>

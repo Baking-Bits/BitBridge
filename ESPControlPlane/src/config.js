@@ -78,6 +78,45 @@ function getOptionalSecret(key, filePathParts = []) {
   return getOptional(key, "", filePathParts);
 }
 
+function getKnownWifiNetworks() {
+  const list = getFileValue(["wifi", "knownNetworks"]);
+  if (!Array.isArray(list)) {
+    return [];
+  }
+
+  return list
+    .map((entry, index) => {
+      if (!entry || typeof entry !== "object") {
+        return null;
+      }
+
+      const ssid = typeof entry.ssid === "string" ? entry.ssid.trim() : "";
+      if (!ssid) {
+        return null;
+      }
+
+      const label =
+        typeof entry.label === "string" && entry.label.trim()
+          ? entry.label.trim()
+          : ssid;
+      const password = typeof entry.password === "string" ? entry.password : "";
+      const enabled = typeof entry.enabled === "boolean" ? entry.enabled : true;
+      const priorityRaw = Number(entry.priority);
+      const priority = Number.isFinite(priorityRaw) ? priorityRaw : index + 1;
+
+      return {
+        id: typeof entry.id === "string" && entry.id.trim() ? entry.id.trim() : `wifi-${index + 1}`,
+        ssid,
+        label,
+        password,
+        enabled,
+        priority
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => left.priority - right.priority);
+}
+
 function loadPrivateKey() {
   const keyPath = getOptional(
     "UNRAID_PRIVATE_KEY_PATH",
@@ -106,6 +145,9 @@ export const config = {
     token: getOptionalSecret("CONTROL_PLANE_TOKEN", ["server", "token"]),
     staticRoot
   },
+  wifi: {
+    knownNetworks: getKnownWifiNetworks()
+  },
   jellyfin: {
     baseUrl: getOptionalUrl("JELLYFIN_BASE_URL", ["jellyfin", "baseUrl"]),
     apiKey: getOptionalSecret("JELLYFIN_API_KEY", ["jellyfin", "apiKey"])
@@ -113,6 +155,13 @@ export const config = {
   jellyseerr: {
     baseUrl: getOptionalUrl("JELLYSEERR_BASE_URL", ["jellyseerr", "baseUrl"]),
     apiKey: getOptionalSecret("JELLYSEERR_API_KEY", ["jellyseerr", "apiKey"])
+  },
+  db: {
+    host: getOptional("DB_HOST", "", ["db", "host"]),
+    port: getNumber("DB_PORT", 3306, ["db", "port"]),
+    user: getOptional("DB_USER", "", ["db", "user"]),
+    password: getOptionalSecret("DB_PASSWORD", ["db", "password"]),
+    name: getOptional("DB_NAME", "", ["db", "name"])
   },
   unraid: {
     host: getOptional("UNRAID_HOST", "", ["unraid", "host"]),
@@ -129,4 +178,8 @@ export const config = {
 
 export function hasUnraidConfig() {
   return Boolean(config.unraid.host && config.unraid.username && config.unraid.privateKey);
+}
+
+export function hasDbConfig() {
+  return Boolean(config.db.host && config.db.user && config.db.password && config.db.name);
 }
