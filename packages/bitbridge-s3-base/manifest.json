@@ -1,6 +1,6 @@
 {
-  "name": "Aura S3 Rescue (Minimal)",
-  "version": "s3-rescue",
+  "name": "BitBridge S3 Base",
+  "version": "1.2.4",
   "builds": [
     {
       "chipFamily": "ESP32-S3",

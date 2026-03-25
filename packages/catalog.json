@@ -102,47 +102,19 @@
     ]
   },
   {
-    "id": "s3-aura-rescue",
+    "id": "s3-bitbridge-base",
     "group": "s3",
-    "name": "Aura S3 Rescue (Display A/B Test)",
-    "boardHint": "ESP32-S3 recovery build (no Wi-Fi, no touch)",
+    "name": "BitBridge S3 Base (Core)",
+    "boardHint": "ESP32-S3 2.8\" 240×320 IPS Touch (core base image)",
     "docsUrl": "",
-    "packagePath": "./packages/aura-s3-rescue/",
+    "packagePath": "./packages/bitbridge-s3-base/",
     "variants": [
       {
-        "id": "aura-s3-rescue-a",
-        "label": "Install Rescue A (S3 mapping from listing)",
-        "notes": "ILI9341 driver + S3 map MOSI11/SCLK12/CS10/DC46/BL45.",
-        "buildLabel": "Rescue A",
-        "manifest": "./packages/aura-s3-rescue/manifest.json"
-      },
-      {
-        "id": "aura-s3-rescue-b",
-        "label": "Install Rescue B (Alt ILI9341_2 driver)",
-        "notes": "Same S3 pin map as A, but ILI9341_2 driver variant.",
-        "buildLabel": "Rescue B",
-        "manifest": "./packages/aura-s3-rescue-alt/manifest.json"
-      },
-      {
-        "id": "aura-s3-rescue-c",
-        "label": "Install Rescue C (Legacy CYD pin map)",
-        "notes": "Legacy CYD pins MOSI13/SCLK14/CS15/DC2/BL21 on S3.",
-        "buildLabel": "Rescue C",
-        "manifest": "./packages/aura-s3-rescue-legacypins/manifest.json"
-      },
-      {
-        "id": "aura-s3-rescue-d",
-        "label": "Install Rescue D (Diagnostic low-speed)",
-        "notes": "Low SPI clock + serial/RGB liveness + backlight pulse diagnostics.",
-        "buildLabel": "Rescue D",
-        "manifest": "./packages/aura-s3-rescue-diag/manifest.json"
-      },
-      {
-        "id": "aura-s3-rescue-d2",
-        "label": "Install Rescue D2 (Diagnostic USB CDC)",
-        "notes": "Rescue D with forced USB CDC on boot for serial capture.",
-        "buildLabel": "Rescue D2",
-        "manifest": "./packages/aura-s3-rescue-diag2/manifest.json"
+        "id": "bitbridge-s3-base-core",
+        "label": "Install BitBridge S3 Base (Core)",
+        "notes": "Base firmware with Wi-Fi provisioning, device registration, periodic check-ins, and OTA-ready core.",
+        "buildLabel": "S3 Base Core",
+        "manifest": "./packages/bitbridge-s3-base/manifest.json"
       }
     ]
   },

@@ -457,7 +457,19 @@ export async function registerDevice(deviceGroup, deviceLabel, serialNumber, ini
     };
   } catch (error) {
     if (error.code === "ER_DUP_ENTRY") {
-      return { ok: false, reason: "device_already_registered" };
+      const [rows] = await pool.execute(`
+        SELECT id
+        FROM devices
+        WHERE serial_number = ?
+        LIMIT 1
+      `, [normalizedSerial]);
+
+      const existingId = Array.isArray(rows) && rows.length > 0 ? Number(rows[0].id) : null;
+      return {
+        ok: false,
+        reason: "device_already_registered",
+        deviceId: Number.isFinite(existingId) && existingId > 0 ? existingId : undefined
+      };
     }
     return { ok: false, reason: "registration_failed" };
   }

@@ -341,7 +341,13 @@ app.post("/api/public/devices/register", async (req, res) => {
     const result = await registerDevice(deviceGroup, deviceLabel, serialNumber, initialFirmwareVersion);
     if (!result.ok) {
       if (result.reason === "device_already_registered") {
-        res.status(409).json({ ok: false, error: "Device with this serial number already exists." });
+        const existingDevice = result.deviceId ? await getDeviceById(result.deviceId) : null;
+        res.status(409).json({
+          ok: false,
+          error: "Device with this serial number already exists.",
+          device: existingDevice,
+          deviceId: existingDevice?.id || result.deviceId || null
+        });
         return;
       }
       res.status(400).json({ ok: false, error: "Failed to register device." });
@@ -432,7 +438,13 @@ app.post("/api/admin/devices", requireSession, async (req, res) => {
     const result = await registerDevice(deviceGroup, deviceLabel, serialNumber, initialFirmwareVersion);
     if (!result.ok) {
       if (result.reason === "device_already_registered") {
-        res.status(409).json({ ok: false, error: "Device with this serial number already exists." });
+        const existingDevice = result.deviceId ? await getDeviceById(result.deviceId) : null;
+        res.status(409).json({
+          ok: false,
+          error: "Device with this serial number already exists.",
+          device: existingDevice,
+          deviceId: existingDevice?.id || result.deviceId || null
+        });
         return;
       }
       res.status(400).json({ ok: false, error: "Failed to register device." });
