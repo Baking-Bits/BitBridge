@@ -8,6 +8,16 @@
 #include <ArduinoJson.h>
 #include "device_config.h"
 
+// App assignment received from the server at check-in
+struct AppAssignment {
+  bool    hasModule    = false;
+  String  appType;       // "system", "weather", "homelab", "pet"
+  String  appVersion;    // "1.0.0"
+  String  appModuleUrl;  // full URL to .wasm file
+  String  appChecksum;   // sha256 hex or empty
+  int     minHostAbi    = 1;
+};
+
 class APIClient {
  private:
   DeviceConfig* config;
@@ -16,6 +26,7 @@ class APIClient {
   WiFiClientSecure wifiClientSecure;
   int lastHttpCode;
   String lastError;
+  AppAssignment lastAppAssignment;
 
  public:
   APIClient(DeviceConfig* cfg) : config(cfg), lastHttpCode(0), lastError("") {}
@@ -26,6 +37,10 @@ class APIClient {
 
   String getLastError() const {
     return lastError;
+  }
+
+  const AppAssignment& getLastAppAssignment() const {
+    return lastAppAssignment;
   }
 
   // Register device with control plane
@@ -134,6 +149,22 @@ class APIClient {
     if (httpCode == 200) {
       Serial.printf("[APIClient] Check-in successful (HTTP %d)\n", httpCode);
       lastError = "";
+
+      // Parse app assignment from response
+      lastAppAssignment = AppAssignment{};
+      StaticJsonDocument<1024> resp;
+      if (!deserializeJson(resp, response) && resp.containsKey("app") && !resp["app"].isNull()) {
+        lastAppAssignment.hasModule    = true;
+        lastAppAssignment.appType      = resp["app"]["appType"].as<String>();
+        lastAppAssignment.appVersion   = resp["app"]["appVersion"].as<String>();
+        lastAppAssignment.appModuleUrl = resp["app"]["appModuleUrl"].as<String>();
+        lastAppAssignment.appChecksum  = resp["app"]["appChecksum"].as<String>();
+        lastAppAssignment.minHostAbi   = resp["app"]["minHostAbi"] | 1;
+        Serial.printf("[APIClient] App assignment: %s v%s\n",
+                      lastAppAssignment.appType.c_str(),
+                      lastAppAssignment.appVersion.c_str());
+      }
+
       return true;
     } else {
       Serial.printf("[APIClient] Check-in failed (HTTP %d): %s\n", httpCode, response.c_str());

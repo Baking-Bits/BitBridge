@@ -133,6 +133,31 @@ export async function ensureDbReady() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
     `);
 
+    // Migration: add app_type column to devices (safe on re-run)
+    try {
+      await pool.query(`ALTER TABLE devices ADD COLUMN app_type VARCHAR(32) NOT NULL DEFAULT 'system'`);
+      console.log("DB migration: added app_type to devices table");
+    } catch (e) {
+      if (e.code !== "ER_DUP_FIELDNAME") throw e;
+    }
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS app_modules (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+        app_type VARCHAR(32) NOT NULL,
+        version VARCHAR(64) NOT NULL,
+        module_url VARCHAR(512) NOT NULL,
+        checksum_sha256 VARCHAR(128) NOT NULL DEFAULT '',
+        min_host_abi INT NOT NULL DEFAULT 1,
+        is_active TINYINT(1) NOT NULL DEFAULT 1,
+        notes TEXT,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        INDEX idx_app_modules_type (app_type),
+        INDEX idx_app_modules_type_active (app_type, is_active)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+    `);
+
     await ensureDefaultAdmin();
 
     available = true;
@@ -387,6 +412,7 @@ export async function listDevices() {
       device_group AS deviceGroup,
       device_label AS deviceLabel,
       firmware_version AS firmwareVersion,
+      app_type AS appType,
       last_checkin AS lastCheckin,
       created_at AS createdAt,
       updated_at AS updatedAt
@@ -415,6 +441,7 @@ export async function getDeviceById(deviceId) {
       device_group AS deviceGroup,
       device_label AS deviceLabel,
       firmware_version AS firmwareVersion,
+      app_type AS appType,
       last_checkin AS lastCheckin,
       created_at AS createdAt,
       updated_at AS updatedAt
@@ -489,6 +516,7 @@ export async function updateDevice(deviceId, updates) {
   const allowedFields = {
     deviceLabel: "device_label",
     firmwareVersion: "firmware_version",
+    appType: "app_type",
     lastCheckin: "last_checkin"
   };
 
@@ -579,6 +607,80 @@ export async function logDeviceCheckin(deviceId, firmwareVersion, status, data) 
     }
     return { ok: false, reason: "checkin_failed" };
   }
+}
+
+export async function setDeviceAppType(deviceId, appType) {
+  return updateDevice(deviceId, { appType: toSafeString(appType, 32) || "system" });
+}
+
+export async function listAppModules(filterAppType = null) {
+  const ready = await ensureDbReady();
+  if (!ready || !pool) return [];
+
+  if (filterAppType) {
+    const [rows] = await pool.execute(`
+      SELECT id, app_type AS appType, version, module_url AS moduleUrl,
+             checksum_sha256 AS checksumSha256, min_host_abi AS minHostAbi,
+             is_active AS isActive, notes, created_at AS createdAt
+      FROM app_modules
+      WHERE app_type = ?
+      ORDER BY created_at DESC
+    `, [toSafeString(filterAppType, 32)]);
+    return rows || [];
+  }
+
+  const [rows] = await pool.query(`
+    SELECT id, app_type AS appType, version, module_url AS moduleUrl,
+           checksum_sha256 AS checksumSha256, min_host_abi AS minHostAbi,
+           is_active AS isActive, notes, created_at AS createdAt
+    FROM app_modules
+    ORDER BY app_type, created_at DESC
+  `);
+  return rows || [];
+}
+
+export async function getActiveAppModule(appType) {
+  const ready = await ensureDbReady();
+  if (!ready || !pool) return null;
+
+  const [rows] = await pool.execute(`
+    SELECT id, app_type AS appType, version, module_url AS moduleUrl,
+           checksum_sha256 AS checksumSha256, min_host_abi AS minHostAbi,
+           is_active AS isActive, notes, created_at AS createdAt
+    FROM app_modules
+    WHERE app_type = ? AND is_active = 1
+    ORDER BY created_at DESC
+    LIMIT 1
+  `, [toSafeString(appType, 32)]);
+
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+  return rows[0];
+}
+
+export async function createAppModule({ appType, version, moduleUrl, checksumSha256 = "", minHostAbi = 1, notes = "" }) {
+  const ready = await ensureDbReady();
+  if (!ready || !pool) return { ok: false, reason: "db_unavailable" };
+
+  const safeType    = toSafeString(appType, 32);
+  const safeVersion = toSafeString(version, 64);
+  const safeUrl     = toSafeString(moduleUrl, 512);
+
+  if (!safeType || !safeVersion || !safeUrl) {
+    return { ok: false, reason: "invalid_payload" };
+  }
+
+  // Deactivate previous modules for this app_type
+  await pool.execute(
+    `UPDATE app_modules SET is_active = 0 WHERE app_type = ?`,
+    [safeType]
+  );
+
+  const [result] = await pool.execute(`
+    INSERT INTO app_modules (app_type, version, module_url, checksum_sha256, min_host_abi, notes, is_active)
+    VALUES (?, ?, ?, ?, ?, ?, 1)
+  `, [safeType, safeVersion, safeUrl, checksumSha256.slice(0, 128), Number(minHostAbi) || 1, notes.slice(0, 500)]);
+
+  return { ok: true, moduleId: result.insertId };
 }
 
 export async function getDeviceCheckins(deviceId, limit = 100) {

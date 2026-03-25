@@ -59,19 +59,85 @@
     </div>
 
     <div class="row g-3 mb-4">
-      <div class="col-md-6">
-        <div class="card h-100">
+      <div class="col-12">
+        <div class="card">
           <div class="card-body">
-            <h2 class="h5 mb-2">Device Management</h2>
-            <p class="text-muted mb-0">Coming soon: registered devices, metadata editing, ownership, and health signals.</p>
+            <div class="d-flex justify-content-between align-items-center mb-3 gap-2 flex-wrap">
+              <h2 class="h5 mb-0">Device Management</h2>
+              <button id="refreshDevices" type="button" class="btn btn-outline-secondary btn-sm">Refresh</button>
+            </div>
+            <div id="deviceStatus" class="small text-muted mb-3">Loading devices...</div>
+            <div class="table-responsive">
+              <table class="table table-sm align-middle" id="deviceTable">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Label / Serial</th>
+                    <th>Group</th>
+                    <th>Firmware</th>
+                    <th>App</th>
+                    <th>Last Check-in</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="deviceTableBody"></tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
-      <div class="col-md-6">
-        <div class="card h-100">
+
+      <div class="col-12">
+        <div class="card">
           <div class="card-body">
-            <h2 class="h5 mb-2">Password Reset</h2>
-            <p class="text-muted mb-0">Coming soon: admin-initiated password reset and account recovery controls.</p>
+            <div class="d-flex justify-content-between align-items-center mb-3 gap-2 flex-wrap">
+              <h2 class="h5 mb-0">App Module Registry</h2>
+              <button id="refreshModules" type="button" class="btn btn-outline-secondary btn-sm">Refresh</button>
+            </div>
+            <p class="text-muted small mb-3">
+              Register Wasm app modules that devices can download at check-in.
+              Admin assigns an app type per device above; on next check-in the device downloads and loads the active module.
+            </p>
+
+            <form id="addModuleForm" class="row g-2 mb-4">
+              <div class="col-md-2">
+                <label class="form-label small">App Type</label>
+                <select id="moduleAppType" class="form-select form-select-sm">
+                  <option value="system">system</option>
+                  <option value="weather">weather</option>
+                  <option value="homelab">homelab</option>
+                  <option value="pet">pet</option>
+                </select>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small">Version</label>
+                <input id="moduleVersion" type="text" class="form-control form-control-sm" placeholder="1.0.0" required />
+              </div>
+              <div class="col-md-4">
+                <label class="form-label small">Module URL (.wasm)</label>
+                <input id="moduleUrl" type="url" class="form-control form-control-sm" placeholder="https://respond2.me/wasm/weather-1.0.0.wasm" required />
+              </div>
+              <div class="col-md-3">
+                <label class="form-label small">SHA-256 Checksum (optional)</label>
+                <input id="moduleChecksum" type="text" class="form-control form-control-sm" placeholder="abc123..." />
+              </div>
+              <div class="col-md-1 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary btn-sm w-100">Add</button>
+              </div>
+              <div class="col-12">
+                <span id="moduleStatus" class="small text-muted">Ready</span>
+              </div>
+            </form>
+
+            <div id="moduleStatus2" class="small text-muted mb-2">Loading modules...</div>
+            <div class="table-responsive">
+              <table class="table table-sm align-middle">
+                <thead>
+                  <tr><th>App Type</th><th>Version</th><th>Module URL</th><th>Active</th><th>Registered</th></tr>
+                </thead>
+                <tbody id="moduleTableBody"></tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>

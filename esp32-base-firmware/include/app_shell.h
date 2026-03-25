@@ -130,6 +130,25 @@ class AppShell {
     apps[appCount++] = app;
   }
 
+  // Set active app by name (case-insensitive match against BaseApp::name())
+  void setActiveByName(const char* name) {
+    if (!name || appCount == 0) return;
+    for (uint8_t i = 0; i < appCount; ++i) {
+      if (apps[i] && strcasecmp(apps[i]->name(), name) == 0) {
+        activeIndex = i;
+        lastRenderMs = 0; // force immediate re-render
+        return;
+      }
+    }
+    Serial.printf("[AppShell] App not found: %s (staying on %s)\n",
+                  name, apps[activeIndex]->name());
+  }
+
+  const char* getActiveAppName() const {
+    if (appCount == 0 || !apps[activeIndex]) return "unknown";
+    return apps[activeIndex]->name();
+  }
+
   bool hasApps() const {
     return appCount > 0;
   }
@@ -166,14 +185,7 @@ class AppShell {
       return;
     }
 
-    if ((nowMs - lastSwitchMs) >= switchIntervalMs) {
-      lastSwitchMs = nowMs;
-      activeIndex = (activeIndex + 1) % appCount;
-      apps[activeIndex]->render(display, config, wifiMgr, nowMs);
-      lastRenderMs = nowMs;
-      return;
-    }
-
+    // No auto-cycling: refresh active app at interval only
     if ((nowMs - lastRenderMs) >= refreshIntervalMs) {
       lastRenderMs = nowMs;
       apps[activeIndex]->render(display, config, wifiMgr, nowMs);

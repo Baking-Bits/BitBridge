@@ -6,7 +6,7 @@
 #include <SPIFFS.h>
 #include <ArduinoJson.h>
 
-#define FIRMWARE_VERSION "1.0.0"
+#define FIRMWARE_VERSION "1.3.0"
 #define FIRMWARE_NAME "BitBridge-ESP32-Base"
 #define DEVICE_GROUP "esp32-s3"
 
@@ -22,6 +22,11 @@ class DeviceConfig {
   String wifiPassword;
   String controlPlaneUrl;
   String lastBootFirmwareVersion;
+  // App module assignment (set by admin, persists across reboots)
+  String selectedAppType;      // e.g. "system", "weather", "homelab", "pet"
+  String selectedAppVersion;   // e.g. "1.0.0"
+  String selectedAppModuleUrl; // https://respond2.me/wasm/weather-1.0.0.wasm
+  String selectedAppChecksum;  // sha256 hex or empty
   bool isConfigured;
 
   DeviceConfig() : isConfigured(false) {}
@@ -51,7 +56,7 @@ class DeviceConfig {
       return false;
     }
 
-    StaticJsonDocument<1024> doc;
+    StaticJsonDocument<2048> doc;
     DeserializationError error = deserializeJson(doc, file);
     file.close();
 
@@ -67,12 +72,17 @@ class DeviceConfig {
     wifiPassword = doc["wifiPassword"].as<String>();
     controlPlaneUrl = doc["controlPlaneUrl"].as<String>();
     lastBootFirmwareVersion = doc["lastBootFirmwareVersion"].as<String>();
+    selectedAppType = doc["selectedAppType"] | String("system");
+    selectedAppVersion = doc["selectedAppVersion"].as<String>();
+    selectedAppModuleUrl = doc["selectedAppModuleUrl"].as<String>();
+    selectedAppChecksum = doc["selectedAppChecksum"].as<String>();
+    if (selectedAppType.isEmpty()) selectedAppType = "system";
 
     return !deviceId.isEmpty() && !serialNumber.isEmpty();
   }
 
   bool saveToFile() {
-    StaticJsonDocument<1024> doc;
+    StaticJsonDocument<2048> doc;
     doc["deviceId"] = deviceId;
     doc["serialNumber"] = serialNumber;
     doc["deviceLabel"] = deviceLabel;
@@ -80,6 +90,10 @@ class DeviceConfig {
     doc["wifiPassword"] = wifiPassword;
     doc["controlPlaneUrl"] = controlPlaneUrl;
     doc["lastBootFirmwareVersion"] = lastBootFirmwareVersion;
+    doc["selectedAppType"] = selectedAppType;
+    doc["selectedAppVersion"] = selectedAppVersion;
+    doc["selectedAppModuleUrl"] = selectedAppModuleUrl;
+    doc["selectedAppChecksum"] = selectedAppChecksum;
 
     File file = SPIFFS.open(CONFIG_FILE, "w");
     if (!file) {

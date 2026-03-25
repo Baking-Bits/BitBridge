@@ -19,7 +19,11 @@ import {
   updateDevice,
   deleteDevice,
   logDeviceCheckin,
-  getDeviceCheckins
+  getDeviceCheckins,
+  setDeviceAppType,
+  listAppModules,
+  getActiveAppModule,
+  createAppModule
 } from "./db.js";
 
 const app = express();
@@ -39,7 +43,7 @@ app.use((req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Access-Control-Allow-Credentials", "true");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-control-plane-key");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
   }
   if (req.method === "OPTIONS") {
     res.sendStatus(204);
@@ -383,7 +387,25 @@ app.post("/api/public/devices/:id/checkin", async (req, res) => {
       return;
     }
 
-    res.status(200).json({ ok: true });
+    // Fetch current app assignment for this device
+    let appAssignment = null;
+    try {
+      const device = await getDeviceById(deviceId);
+      if (device && device.appType) {
+        const appModule = await getActiveAppModule(device.appType);
+        appAssignment = {
+          appType: device.appType,
+          appVersion: appModule?.version || null,
+          appModuleUrl: appModule?.moduleUrl || null,
+          appChecksum: appModule?.checksumSha256 || null,
+          minHostAbi: appModule?.minHostAbi || 1
+        };
+      }
+    } catch (_e) {
+      // Non-fatal: app assignment is optional
+    }
+
+    res.status(200).json({ ok: true, app: appAssignment });
   } catch (error) {
     res.status(500).json({ ok: false, error: String(error.message || error) });
   }
@@ -509,6 +531,82 @@ app.delete("/api/admin/devices/:id", requireSession, async (req, res) => {
   }
 });
 
+// ── App assignment for a device ────────────────────────────────────────────
+app.put("/api/admin/devices/:id/app", requireSession, async (req, res) => {
+  try {
+    const deviceId = req.params.id;
+    const appType = typeof req.body?.appType === "string" ? req.body.appType.trim().toLowerCase() : "";
+
+    if (!appType) {
+      res.status(400).json({ ok: false, error: "appType is required" });
+      return;
+    }
+
+    const result = await setDeviceAppType(deviceId, appType);
+    if (!result.ok) {
+      res.status(400).json({ ok: false, error: "Failed to update app assignment." });
+      return;
+    }
+
+    const device = await getDeviceById(deviceId);
+    res.status(200).json({ ok: true, device });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error.message || error) });
+  }
+});
+
+// ── App module registry ─────────────────────────────────────────────────────
+app.get("/api/admin/app-modules", requireSession, async (req, res) => {
+  try {
+    const appType = typeof req.query.appType === "string" ? req.query.appType : null;
+    const modules = await listAppModules(appType);
+    res.status(200).json({ ok: true, modules });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error.message || error) });
+  }
+});
+
+app.get("/api/admin/app-modules/:appType/active", requireSession, async (req, res) => {
+  try {
+    const appType = req.params.appType;
+    const module = await getActiveAppModule(appType);
+    if (!module) {
+      res.status(404).json({ ok: false, error: "No active module for this app type." });
+      return;
+    }
+    res.status(200).json({ ok: true, module });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error.message || error) });
+  }
+});
+
+app.post("/api/admin/app-modules", requireSession, async (req, res) => {
+  try {
+    const appType        = typeof req.body?.appType        === "string" ? req.body.appType.trim().toLowerCase() : "";
+    const version        = typeof req.body?.version        === "string" ? req.body.version.trim()               : "";
+    const moduleUrl      = typeof req.body?.moduleUrl      === "string" ? req.body.moduleUrl.trim()             : "";
+    const checksumSha256 = typeof req.body?.checksumSha256 === "string" ? req.body.checksumSha256.trim()        : "";
+    const minHostAbi     = typeof req.body?.minHostAbi     === "number" ? req.body.minHostAbi                   : 1;
+    const notes          = typeof req.body?.notes          === "string" ? req.body.notes.trim()                 : "";
+
+    if (!appType || !version || !moduleUrl) {
+      res.status(400).json({ ok: false, error: "appType, version, and moduleUrl are required" });
+      return;
+    }
+
+    const result = await createAppModule({ appType, version, moduleUrl, checksumSha256, minHostAbi, notes });
+    if (!result.ok) {
+      res.status(400).json({ ok: false, error: "Failed to register app module." });
+      return;
+    }
+
+    res.status(201).json({ ok: true, moduleId: result.moduleId });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error.message || error) });
+  }
+});
+
+// ── Device checkins ─────────────────────────────────────────────────────────
 app.get("/api/admin/devices/:id/checkins", requireSession, async (req, res) => {
   try {
     const deviceId = req.params.id;
@@ -638,6 +736,7 @@ ensureDbReady().catch((error) => {
 
 app.use("/packages", express.static(path.join(config.server.staticRoot, "packages")));
 app.use("/bin", express.static(path.join(config.server.staticRoot, "bin")));
+app.use("/wasm", express.static(path.join(config.server.staticRoot, "wasm")));
 app.use(express.static(config.server.staticRoot, { index: false }));
 
 app.get("*", (_req, res) => {

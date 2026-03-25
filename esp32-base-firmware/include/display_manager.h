@@ -109,6 +109,15 @@ class DisplayManager {
     return started;
   }
 
+  // Public drawing primitives — used by Wasm host API
+  void drawTextPublic(const String& text, int x, int y, uint16_t fg, uint16_t bg, uint8_t scale, int maxChars = 40) {
+    if (started) drawText(text, x, y, fg, bg, scale, maxChars);
+  }
+
+  void fillRectPublic(int x, int y, int w, int h, uint16_t color) {
+    if (started) fillRect(x, y, w, h, color);
+  }
+
   void tick() {
     if (!started) {
       return;
