@@ -21,6 +21,10 @@
   const moduleStatusEl     = document.getElementById("moduleStatus");
   const moduleStatus2El    = document.getElementById("moduleStatus2");
   const moduleTableBodyEl  = document.getElementById("moduleTableBody");
+  const deployLocalFormEl  = document.getElementById("deployLocalModuleForm");
+  const deployStatusEl     = document.getElementById("deployModuleStatus");
+  const deployFileNameEl   = document.getElementById("deployFileName");
+  const refreshWasmFilesEl = document.getElementById("refreshWasmFiles");
 
   const APP_TYPES = ["system", "weather", "homelab", "pet"];
 
@@ -30,6 +34,8 @@
   refreshDevicesEl?.addEventListener("click", () => loadDevices());
   refreshModulesEl?.addEventListener("click", () => loadModules());
   addModuleFormEl?.addEventListener("submit", async (e) => { e.preventDefault(); await addModule(); });
+  refreshWasmFilesEl?.addEventListener("click", () => loadWasmFiles());
+  deployLocalFormEl?.addEventListener("submit", async (e) => { e.preventDefault(); await deployLocalModule(); });
   changePasswordFormEl?.addEventListener("submit", async (event) => {
     event.preventDefault();
     await changePassword();
@@ -39,6 +45,7 @@
   loadSelections();
   loadDevices();
   loadModules();
+  loadWasmFiles();
 
   // ── Account ────────────────────────────────────────────────────────────────
 
@@ -272,6 +279,74 @@
       await loadModules();
     } catch (error) {
       moduleStatusEl.textContent = `Failed: ${String(error.message || error)}`;
+    }
+  }
+
+  async function loadWasmFiles() {
+    if (!deployFileNameEl || !deployStatusEl) return;
+    deployStatusEl.textContent = "Loading local wasm files...";
+    deployFileNameEl.innerHTML = "";
+    try {
+      const response = await fetch("/api/admin/wasm-files", { cache: "no-store", credentials: "same-origin" });
+      if (!response.ok) throw new Error(`Request failed (${response.status})`);
+      const payload = await response.json();
+      const files = Array.isArray(payload?.files) ? payload.files : [];
+      if (!files.length) {
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = "No .wasm files found in packages/wasm";
+        deployFileNameEl.appendChild(opt);
+        deployStatusEl.textContent = "No local wasm files found.";
+        return;
+      }
+      for (const file of files) {
+        const opt = document.createElement("option");
+        opt.value = file.fileName;
+        opt.textContent = `${file.fileName} (${Math.round((Number(file.sizeBytes) || 0) / 1024)} KB)`;
+        deployFileNameEl.appendChild(opt);
+      }
+      deployStatusEl.textContent = `${files.length} local wasm file(s) available.`;
+    } catch (error) {
+      deployStatusEl.textContent = `Could not load wasm files: ${String(error.message || error)}`;
+    }
+  }
+
+  async function deployLocalModule() {
+    if (!deployStatusEl) return;
+    const appType = document.getElementById("deployAppType")?.value?.trim() || "";
+    const fileName = deployFileNameEl?.value?.trim() || "";
+    const version = document.getElementById("deployVersion")?.value?.trim() || "";
+    const assign = document.getElementById("deployAssignMode")?.value || "none";
+    const deviceIdRaw = document.getElementById("deployDeviceId")?.value?.trim() || "";
+    const deviceId = deviceIdRaw ? Number(deviceIdRaw) : null;
+
+    if (!appType || !fileName || !version) {
+      deployStatusEl.textContent = "appType, fileName, and version are required.";
+      return;
+    }
+    if (assign === "one" && (!Number.isFinite(deviceId) || deviceId <= 0)) {
+      deployStatusEl.textContent = "When assign=one, provide a valid Device ID.";
+      return;
+    }
+
+    deployStatusEl.textContent = "Deploying local module...";
+    try {
+      const response = await fetch("/api/admin/app-modules/deploy-local", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ appType, fileName, version, assign, deviceId })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error || `Request failed (${response.status})`);
+      }
+
+      deployStatusEl.textContent = `Deployed ${payload.fileName} → ${payload.appType} v${payload.version}; assigned ${payload.assignment?.assignedDevices || 0} device(s).`;
+      await loadModules();
+      await loadDevices();
+    } catch (error) {
+      deployStatusEl.textContent = `Deploy failed: ${String(error.message || error)}`;
     }
   }
 

@@ -17,6 +17,18 @@
 
 class AppLoader {
  public:
+  static bool isValidWasmFile(const String& path) {
+    if (!SPIFFS.exists(path)) return false;
+    File f = SPIFFS.open(path, "r");
+    if (!f) return false;
+
+    uint8_t magic[4] = {0, 0, 0, 0};
+    size_t n = f.read(magic, sizeof(magic));
+    f.close();
+
+    return n == 4 && magic[0] == 0x00 && magic[1] == 0x61 && magic[2] == 0x73 && magic[3] == 0x6D;
+  }
+
   // Returns the SPIFFS path for an app type's module file
   static String wasmPath(const String& appType) {
     String t = appType;
@@ -135,6 +147,12 @@ class AppLoader {
 
     if (bytesWritten == 0) {
       Serial.println("[AppLoader] Zero bytes written");
+      SPIFFS.remove(tmpPath);
+      return false;
+    }
+
+    if (!isValidWasmFile(tmpPath)) {
+      Serial.println("[AppLoader] Download is not a valid .wasm (bad magic header)");
       SPIFFS.remove(tmpPath);
       return false;
     }

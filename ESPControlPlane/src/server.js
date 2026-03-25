@@ -6,6 +6,8 @@ import { config, hasUnraidConfig } from "./config.js";
 import { getContainerStatus, restartContainer, startContainer } from "./unraid.js";
 import { fetchJellyfinStatus, fetchJellyseerrStatus } from "./services.js";
 import { signSession, verifySession, COOKIE_NAME } from "./auth.js";
+import { prepareWeatherOta } from "./weather-ota.js";
+import { listLocalWasmFiles, deployLocalWasmModule } from "./wasm-deploy.js";
 import {
   authenticateUser,
   changeUserPassword,
@@ -603,6 +605,66 @@ app.post("/api/admin/app-modules", requireSession, async (req, res) => {
     res.status(201).json({ ok: true, moduleId: result.moduleId });
   } catch (error) {
     res.status(500).json({ ok: false, error: String(error.message || error) });
+  }
+});
+
+app.post("/api/admin/weather/prepare-ota", requireSession, async (req, res) => {
+  try {
+    const assign = typeof req.body?.assign === "string" ? req.body.assign : "none";
+    const deviceId = Number(req.body?.deviceId);
+    const version = typeof req.body?.version === "string" ? req.body.version : "1.0.0";
+    const minHostAbi = Number(req.body?.minHostAbi) || 1;
+
+    const modulePath = path.join(config.server.staticRoot, "packages", "wasm", "weather-v1.wasm");
+    const moduleUrl = "/packages/wasm/weather-v1.wasm";
+
+    const result = await prepareWeatherOta({
+      modulePath,
+      moduleUrl,
+      version,
+      minHostAbi,
+      assign,
+      deviceId: Number.isFinite(deviceId) ? deviceId : null
+    });
+
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(400).json({ ok: false, error: String(error.message || error) });
+  }
+});
+
+app.get("/api/admin/wasm-files", requireSession, async (_req, res) => {
+  try {
+    const files = listLocalWasmFiles(config.server.staticRoot);
+    res.status(200).json({ ok: true, files });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: String(error.message || error) });
+  }
+});
+
+app.post("/api/admin/app-modules/deploy-local", requireSession, async (req, res) => {
+  try {
+    const appType = typeof req.body?.appType === "string" ? req.body.appType : "";
+    const fileName = typeof req.body?.fileName === "string" ? req.body.fileName : "";
+    const version = typeof req.body?.version === "string" ? req.body.version : "";
+    const minHostAbi = Number(req.body?.minHostAbi) || 1;
+    const assign = typeof req.body?.assign === "string" ? req.body.assign : "none";
+    const deviceId = Number(req.body?.deviceId);
+
+    const result = await deployLocalWasmModule({
+      staticRoot: config.server.staticRoot,
+      appType,
+      fileName,
+      version,
+      minHostAbi,
+      assign,
+      deviceId: Number.isFinite(deviceId) ? deviceId : null,
+      notes: "Local wasm deploy from admin panel"
+    });
+
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(400).json({ ok: false, error: String(error.message || error) });
   }
 });
 

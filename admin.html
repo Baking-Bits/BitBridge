@@ -129,6 +129,43 @@
               </div>
             </form>
 
+            <div class="border rounded p-3 mb-4">
+              <h3 class="h6 mb-3">Quick Deploy From packages/wasm</h3>
+              <form id="deployLocalModuleForm" class="row g-2">
+                <div class="col-md-2">
+                  <label class="form-label small">App Type</label>
+                  <input id="deployAppType" type="text" class="form-control form-control-sm" placeholder="weather" required />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label small">Wasm File</label>
+                  <select id="deployFileName" class="form-select form-select-sm"></select>
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label small">Version</label>
+                  <input id="deployVersion" type="text" class="form-control form-control-sm" placeholder="1.0.0" required />
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label small">Assign</label>
+                  <select id="deployAssignMode" class="form-select form-select-sm">
+                    <option value="none">none</option>
+                    <option value="one">one device</option>
+                    <option value="all">all devices</option>
+                  </select>
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label small">Device ID (if one)</label>
+                  <input id="deployDeviceId" type="number" class="form-control form-control-sm" placeholder="3" />
+                </div>
+                <div class="col-md-1 d-flex align-items-end">
+                  <button type="submit" class="btn btn-success btn-sm w-100">Deploy</button>
+                </div>
+                <div class="col-12 d-flex justify-content-between align-items-center">
+                  <span id="deployModuleStatus" class="small text-muted">Ready</span>
+                  <button id="refreshWasmFiles" type="button" class="btn btn-outline-secondary btn-sm">Refresh Files</button>
+                </div>
+              </form>
+            </div>
+
             <div id="moduleStatus2" class="small text-muted mb-2">Loading modules...</div>
             <div class="table-responsive">
               <table class="table table-sm align-middle">

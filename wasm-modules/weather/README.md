@@ -64,6 +64,31 @@ Then register in admin with:
 - `moduleUrl`: `/packages/wasm/weather-v1.wasm`
 - `checksumSha256`: optional
 
+## One-command OTA prep (recommended)
+
+From `ESPControlPlane` folder, after `weather-v1.wasm` exists in `packages/wasm`:
+
+```powershell
+npm run prepare:weather-ota
+```
+
+Optional assignment modes:
+
+```powershell
+# assign one device
+npm run prepare:weather-ota -- --assign one --device-id 3
+
+# assign all devices
+npm run prepare:weather-ota -- --assign all
+```
+
+What this does:
+
+1. Validates `.wasm` magic header
+2. Computes SHA-256
+3. Registers/activates weather module in DB
+4. Optionally sets device app type to `weather`
+
 ## Notes
 
 - Fetch interval is 10 minutes (module-side cache).

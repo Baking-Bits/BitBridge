@@ -6,7 +6,8 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "dev": "node --watch src/server.js",
+    "prepare:weather-ota": "node src/prepare-weather-ota.js"
   },
   "dependencies": {
     "axios": "^1.13.0",
