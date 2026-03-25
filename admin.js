@@ -223,7 +223,7 @@
       const payload = await response.json();
       const modules = Array.isArray(payload?.modules) ? payload.modules : [];
       if (!modules.length) {
-        moduleStatus2El.textContent = "No app modules registered yet.";
+        moduleStatus2El.textContent = "No app modules yet. Place .wasm files in packages/wasm and refresh (auto-register).";
         return;
       }
       for (const mod of modules) {

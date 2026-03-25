@@ -7,7 +7,7 @@ import { getContainerStatus, restartContainer, startContainer } from "./unraid.j
 import { fetchJellyfinStatus, fetchJellyseerrStatus } from "./services.js";
 import { signSession, verifySession, COOKIE_NAME } from "./auth.js";
 import { prepareWeatherOta } from "./weather-ota.js";
-import { listLocalWasmFiles, deployLocalWasmModule } from "./wasm-deploy.js";
+import { listLocalWasmFiles, deployLocalWasmModule, autoRegisterLocalWasmModules } from "./wasm-deploy.js";
 import {
   authenticateUser,
   changeUserPassword,
@@ -394,7 +394,11 @@ app.post("/api/public/devices/:id/checkin", async (req, res) => {
     try {
       const device = await getDeviceById(deviceId);
       if (device && device.appType) {
-        const appModule = await getActiveAppModule(device.appType);
+        let appModule = await getActiveAppModule(device.appType);
+        if (!appModule) {
+          await autoRegisterLocalWasmModules(config.server.staticRoot, device.appType);
+          appModule = await getActiveAppModule(device.appType);
+        }
         appAssignment = {
           appType: device.appType,
           appVersion: appModule?.version || null,
@@ -561,6 +565,7 @@ app.put("/api/admin/devices/:id/app", requireSession, async (req, res) => {
 app.get("/api/admin/app-modules", requireSession, async (req, res) => {
   try {
     const appType = typeof req.query.appType === "string" ? req.query.appType : null;
+    await autoRegisterLocalWasmModules(config.server.staticRoot, appType);
     const modules = await listAppModules(appType);
     res.status(200).json({ ok: true, modules });
   } catch (error) {
