@@ -428,7 +428,7 @@ export async function listDevices() {
         ORDER BY dc2.created_at DESC, dc2.id DESC
         LIMIT 1
       )
-    ORDER BY created_at DESC
+    ORDER BY d.created_at DESC
   `);
 
   return rows || [];

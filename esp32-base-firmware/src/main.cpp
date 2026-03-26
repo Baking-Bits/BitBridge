@@ -70,6 +70,30 @@ String apiErrorLine(const APIClient& client) {
   return error;
 }
 
+String resolveModuleUrl(const String& moduleUrl) {
+  String url = moduleUrl;
+  url.trim();
+  if (url.isEmpty()) return String("");
+
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    return url;
+  }
+
+  String base = deviceConfig.controlPlaneUrl;
+  base.trim();
+  if (base.isEmpty()) return String("");
+
+  while (base.endsWith("/")) {
+    base.remove(base.length() - 1);
+  }
+
+  if (url.startsWith("/")) {
+    return base + url;
+  }
+
+  return base + "/" + url;
+}
+
 void ensureAppShellInitialized() {
   if (appShellInitialized) {
     return;
@@ -84,9 +108,9 @@ void ensureAppShellInitialized() {
   appShellInitialized = true;
 
   // Apply persisted app selection on boot
+  appShell.setActiveByName("system");
   if (!deviceConfig.selectedAppType.isEmpty()) {
-    appShell.setActiveByName(deviceConfig.selectedAppType.c_str());
-    Serial.printf("[Setup] Restoring app selection: %s\n", deviceConfig.selectedAppType.c_str());
+    Serial.printf("[Setup] Assigned app type: %s\n", deviceConfig.selectedAppType.c_str());
   }
 
   // Attempt to load a cached Wasm module for the selected app type
@@ -125,28 +149,29 @@ void handleAppAssignment() {
 
   // Update native shell selection
   ensureAppShellInitialized();
-  appShell.setActiveByName(newType.c_str());
+  appShell.setActiveByName("system");
 
   // Check if we need to download a new Wasm module
+  String resolvedUrl = resolveModuleUrl(newUrl);
   bool versionChanged = (deviceConfig.selectedAppVersion != newVersion);
-  bool shouldDownload = !newUrl.isEmpty() && (typeChanged || versionChanged);
+  bool shouldDownload = !resolvedUrl.isEmpty() && (typeChanged || versionChanged);
 
   if (shouldDownload) {
-    Serial.printf("[AppAssign] Downloading Wasm module: %s v%s\n",
-                  newType.c_str(), newVersion.c_str());
+    Serial.printf("[AppAssign] Downloading Wasm module: %s v%s from %s\n",
+                  newType.c_str(), newVersion.c_str(), resolvedUrl.c_str());
     display.showRegistration("Updating App...");
 
     // Unload any running Wasm first
     wasmHost.unload();
 
     setWasmHostContext(&display, &deviceConfig, &wifiMgr);
-    if (appLoader.download(newUrl, newType, a.appChecksum)) {
+    if (appLoader.download(resolvedUrl, newType, a.appChecksum)) {
       // Load the freshly downloaded module
       String path = AppLoader::wasmPath(newType);
       if (wasmHost.loadFromSPIFFS(path, newType)) {
         wasmHost.callOnInit();
         deviceConfig.selectedAppVersion   = newVersion;
-        deviceConfig.selectedAppModuleUrl = newUrl;
+        deviceConfig.selectedAppModuleUrl = resolvedUrl;
         deviceConfig.selectedAppChecksum  = a.appChecksum;
         deviceConfig.saveToFile();
         lastWasmRenderMs = 0;  // force immediate render
