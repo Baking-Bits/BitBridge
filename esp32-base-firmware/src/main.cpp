@@ -71,12 +71,56 @@ String apiErrorLine(const APIClient& client) {
 }
 
 String resolveModuleUrl(const String& moduleUrl) {
+  auto extractHost = [](const String& fullUrl) -> String {
+    int schemeIdx = fullUrl.indexOf("://");
+    int hostStart = schemeIdx >= 0 ? schemeIdx + 3 : 0;
+    int hostEnd = fullUrl.indexOf('/', hostStart);
+    String hostPort = (hostEnd >= 0) ? fullUrl.substring(hostStart, hostEnd) : fullUrl.substring(hostStart);
+    int atIdx = hostPort.lastIndexOf('@');
+    if (atIdx >= 0) {
+      hostPort = hostPort.substring(atIdx + 1);
+    }
+    int colonIdx = hostPort.indexOf(':');
+    String host = (colonIdx >= 0) ? hostPort.substring(0, colonIdx) : hostPort;
+    host.trim();
+    host.toLowerCase();
+    return host;
+  };
+
+  auto isPrivateIpv4Host = [](const String& host) -> bool {
+    int a = -1, b = -1, c = -1, d = -1;
+    if (sscanf(host.c_str(), "%d.%d.%d.%d", &a, &b, &c, &d) != 4) {
+      return false;
+    }
+    if (a < 0 || a > 255 || b < 0 || b > 255 || c < 0 || c > 255 || d < 0 || d > 255) {
+      return false;
+    }
+    if (a == 10) return true;
+    if (a == 127) return true;
+    if (a == 192 && b == 168) return true;
+    if (a == 172 && b >= 16 && b <= 31) return true;
+    return false;
+  };
+
+  auto maybeDowngradeHttps = [&](const String& fullUrl) -> String {
+    if (!fullUrl.startsWith("https://")) {
+      return fullUrl;
+    }
+    String host = extractHost(fullUrl);
+    if (host == "localhost" || host.endsWith(".local") || isPrivateIpv4Host(host)) {
+      String downgraded = "http://" + fullUrl.substring(8);
+      Serial.printf("[AppAssign] Local/private module host detected, using HTTP: %s\n", downgraded.c_str());
+      return downgraded;
+    }
+    return fullUrl;
+  };
+
   String url = moduleUrl;
   url.trim();
   if (url.isEmpty()) return String("");
 
   if (url.startsWith("http://") || url.startsWith("https://")) {
-    return url;
+    return maybeDowngradeHttps(url);
   }
 
   String base = deviceConfig.controlPlaneUrl;
@@ -88,10 +132,10 @@ String resolveModuleUrl(const String& moduleUrl) {
   }
 
   if (url.startsWith("/")) {
-    return base + url;
+    return maybeDowngradeHttps(base + url);
   }
 
-  return base + "/" + url;
+  return maybeDowngradeHttps(base + "/" + url);
 }
 
 void ensureAppShellInitialized() {
@@ -154,7 +198,43 @@ void handleAppAssignment() {
   // Check if we need to download a new Wasm module
   String resolvedUrl = resolveModuleUrl(newUrl);
   bool versionChanged = (deviceConfig.selectedAppVersion != newVersion);
-  bool shouldDownload = !resolvedUrl.isEmpty() && (typeChanged || versionChanged);
+  bool urlChanged = (deviceConfig.selectedAppModuleUrl != resolvedUrl);
+  bool checksumChanged = (deviceConfig.selectedAppChecksum != a.appChecksum);
+  bool moduleMissing = !AppLoader::hasModule(newType);
+  bool runtimeNotLoaded = !wasmHost.isLoaded();
+
+  // If runtime is not loaded but a cached module exists, try loading cache first.
+  // This avoids unnecessary downloads and makes app switching resilient when
+  // network is flaky.
+  if (runtimeNotLoaded && !moduleMissing) {
+    Serial.printf("[AppAssign] Runtime not loaded; trying cached Wasm for '%s'...\n", newType.c_str());
+    wasmHost.unload();
+    setWasmHostContext(&display, &deviceConfig, &wifiMgr);
+    String cachedPath = AppLoader::wasmPath(newType);
+    if (wasmHost.loadFromSPIFFS(cachedPath, newType)) {
+      wasmHost.callOnInit();
+      lastWasmRenderMs = 0;
+
+      if (typeChanged || versionChanged || urlChanged || checksumChanged) {
+        deviceConfig.selectedAppVersion = newVersion;
+        deviceConfig.selectedAppModuleUrl = resolvedUrl;
+        deviceConfig.selectedAppChecksum = a.appChecksum;
+        deviceConfig.saveToFile();
+      }
+
+      Serial.printf("[AppAssign] Loaded cached Wasm module for '%s'\n", newType.c_str());
+      return;
+    }
+
+    Serial.println("[AppAssign] Cached Wasm load failed; clearing cache and attempting download");
+    AppLoader::clearModule(newType);
+    moduleMissing = true;
+    runtimeNotLoaded = true;
+  }
+
+  bool shouldDownload = !resolvedUrl.isEmpty() && (
+    typeChanged || versionChanged || urlChanged || checksumChanged || moduleMissing || runtimeNotLoaded
+  );
 
   if (shouldDownload) {
     Serial.printf("[AppAssign] Downloading Wasm module: %s v%s from %s\n",
@@ -185,12 +265,25 @@ void handleAppAssignment() {
       }
     } else {
       Serial.println("[AppAssign] Wasm download failed — keeping previous module");
+      if (AppLoader::hasModule(newType)) {
+        Serial.println("[AppAssign] Download failed; attempting cached module fallback");
+        setWasmHostContext(&display, &deviceConfig, &wifiMgr);
+        String cachedPath = AppLoader::wasmPath(newType);
+        if (wasmHost.loadFromSPIFFS(cachedPath, newType)) {
+          wasmHost.callOnInit();
+          lastWasmRenderMs = 0;
+          Serial.println("[AppAssign] Cached module fallback loaded");
+          return;
+        }
+      }
       display.showError("APP DL FAIL", "Retrying next check-in");
       delay(2000);
     }
-  } else if (typeChanged || versionChanged) {
-    // Type or version noted but no URL provided — persist type only
+  } else if (typeChanged || versionChanged || urlChanged || checksumChanged) {
+    // Assignment changed but no URL available — persist metadata only
     deviceConfig.selectedAppVersion = newVersion;
+    deviceConfig.selectedAppModuleUrl = resolvedUrl;
+    deviceConfig.selectedAppChecksum = a.appChecksum;
     deviceConfig.saveToFile();
   }
 }
@@ -259,10 +352,10 @@ void setup() {
 
   // Connect WiFi
   Serial.println("[Setup] Initializing WiFi...");
-  display.showWiFiProvisioning();
+  display.showWiFiProvisioning(wifiMgr.getProvisioningSsid());
   if (!wifiMgr.begin()) {
     Serial.println("[Setup] WiFi initialization failed - entering provisioning mode");
-    display.showWiFiProvisioning();
+    display.showWiFiProvisioning(wifiMgr.getProvisioningSsid());
     indicateLEDStatus(3);
     return;
   }

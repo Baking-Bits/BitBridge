@@ -49,7 +49,7 @@ class WiFiMgr {
     snprintf(suffix, sizeof(suffix), "%06X", static_cast<unsigned int>(ESP.getEfuseMac() & 0xFFFFFFULL));
     activeApSsid = String("BitBridge-Setup-") + String(suffix);
 
-    const char *defaultControlPlane = "https://respond2.me";
+    const char *defaultControlPlane = "http://192.168.1.206:8787";
     String currentControlPlane = config->controlPlaneUrl;
     if (currentControlPlane.isEmpty()) {
       currentControlPlane = String(defaultControlPlane);
@@ -103,6 +103,16 @@ class WiFiMgr {
 
   int8_t getRSSI() const {
     return WiFi.RSSI();
+  }
+
+  String getProvisioningSsid() const {
+    if (!activeApSsid.isEmpty()) {
+      return activeApSsid;
+    }
+
+    char suffix[7] = {0};
+    snprintf(suffix, sizeof(suffix), "%06X", static_cast<unsigned int>(ESP.getEfuseMac() & 0xFFFFFFULL));
+    return String("BitBridge-Setup-") + String(suffix);
   }
 
 };

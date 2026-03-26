@@ -75,6 +75,7 @@ class AppLoader {
         return false;
       }
     } else {
+      plainClient.setTimeout(20);  // seconds
       if (!http.begin(plainClient, url)) {
         Serial.println("[AppLoader] http begin failed");
         return false;
@@ -110,43 +111,25 @@ class AppLoader {
       return false;
     }
 
-    WiFiClient* stream = http.getStreamPtr();
-    uint8_t     buf[512];
-    int         bytesWritten   = 0;
-    int         bytesRemaining = totalSize;
-    unsigned long startMs      = millis();
-
-    while (http.connected() && (bytesRemaining > 0 || totalSize < 0)) {
-      if ((millis() - startMs) > 20000UL) {
-        Serial.println("[AppLoader] Timeout");
-        f.close();
-        SPIFFS.remove(tmpPath);
-        http.end();
-        return false;
-      }
-
-      size_t available = stream->available();
-      if (available) {
-        size_t toRead = min(available, sizeof(buf));
-        if (bytesRemaining > 0) toRead = min(toRead, (size_t)bytesRemaining);
-        int n = stream->readBytes(buf, toRead);
-        if (n > 0) {
-          f.write(buf, n);
-          bytesWritten   += n;
-          bytesRemaining -= n;
-        }
-      } else {
-        delay(1);
-      }
-
-      if (totalSize > 0 && bytesRemaining <= 0) break;
-    }
+    int bytesWritten = http.writeToStream(&f);
 
     f.close();
     http.end();
 
+    if (bytesWritten < 0) {
+      Serial.printf("[AppLoader] writeToStream failed: %d\n", bytesWritten);
+      SPIFFS.remove(tmpPath);
+      return false;
+    }
+
     if (bytesWritten == 0) {
       Serial.println("[AppLoader] Zero bytes written");
+      SPIFFS.remove(tmpPath);
+      return false;
+    }
+
+    if (totalSize > 0 && bytesWritten != totalSize) {
+      Serial.printf("[AppLoader] Incomplete download: wrote %d of %d bytes\n", bytesWritten, totalSize);
       SPIFFS.remove(tmpPath);
       return false;
     }

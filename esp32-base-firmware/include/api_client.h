@@ -210,15 +210,58 @@ class APIClient {
   }
 
  private:
+  static String extractHost(const String& url) {
+    int schemeIdx = url.indexOf("://");
+    int hostStart = schemeIdx >= 0 ? schemeIdx + 3 : 0;
+    int hostEnd = url.indexOf('/', hostStart);
+    String hostPort = (hostEnd >= 0) ? url.substring(hostStart, hostEnd) : url.substring(hostStart);
+    int atIdx = hostPort.lastIndexOf('@');
+    if (atIdx >= 0) {
+      hostPort = hostPort.substring(atIdx + 1);
+    }
+    int colonIdx = hostPort.indexOf(':');
+    String host = (colonIdx >= 0) ? hostPort.substring(0, colonIdx) : hostPort;
+    host.trim();
+    host.toLowerCase();
+    return host;
+  }
+
+  static bool isPrivateIpv4Host(const String& host) {
+    int a = -1, b = -1, c = -1, d = -1;
+    if (sscanf(host.c_str(), "%d.%d.%d.%d", &a, &b, &c, &d) != 4) {
+      return false;
+    }
+    if (a < 0 || a > 255 || b < 0 || b > 255 || c < 0 || c > 255 || d < 0 || d > 255) {
+      return false;
+    }
+    if (a == 10) return true;
+    if (a == 127) return true;
+    if (a == 192 && b == 168) return true;
+    if (a == 172 && b >= 16 && b <= 31) return true;
+    return false;
+  }
+
+  static bool shouldDowngradeHttpsToHttp(const String& url) {
+    if (!url.startsWith("https://")) {
+      return false;
+    }
+    String host = extractHost(url);
+    if (host.isEmpty()) {
+      return false;
+    }
+    return host == "localhost" || host.endsWith(".local") || isPrivateIpv4Host(host);
+  }
+
   String normalizedBaseUrl() {
     String baseUrl = config->controlPlaneUrl;
     baseUrl.trim();
 
-    // Migrate legacy local default to cloud control plane.
-    if (baseUrl.indexOf("bitbridge.local") >= 0) {
-      baseUrl = "https://respond2.me";
+    // Migrate legacy local default to local dev server.
+    if (baseUrl.indexOf("bitbridge.local") >= 0 || baseUrl == "https://respond2.me" || baseUrl == "http://respond2.me") {
+      baseUrl = "http://192.168.1.206:8787";
       config->controlPlaneUrl = baseUrl;
       config->saveToFile();
+      Serial.printf("[APIClient] Migrated legacy URL to local dev server: %s\n", baseUrl.c_str());
     }
 
     // If user entered host only (no scheme), default to HTTPS.
@@ -226,6 +269,13 @@ class APIClient {
       baseUrl = "https://" + baseUrl;
       config->controlPlaneUrl = baseUrl;
       config->saveToFile();
+    }
+
+    if (shouldDowngradeHttpsToHttp(baseUrl)) {
+      baseUrl = "http://" + baseUrl.substring(8);
+      config->controlPlaneUrl = baseUrl;
+      config->saveToFile();
+      Serial.printf("[APIClient] Local/private host detected, using HTTP: %s\n", baseUrl.c_str());
     }
 
     while (baseUrl.endsWith("/")) {

@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <ctype.h>
+#include <qrcode.h>
 
 #ifndef LCD_MISO
 #define LCD_MISO 13
@@ -56,9 +57,21 @@ class DisplayManager {
     drawStatusText("BOOTING", line2 ? String(line2) : String(""));
   }
 
-  void showWiFiProvisioning() {
+  void showWiFiProvisioning(const String &ssid = "") {
     showPattern(0xFD20);
-    drawStatusText("WIFI SETUP", "OPEN 192.168.4.1");
+    String apSsid = ssid;
+    if (apSsid.isEmpty()) {
+      apSsid = "BitBridge-Setup";
+    }
+
+    drawStatusText("WIFI SETUP", "SCAN QR TO CONNECT");
+
+    uint16_t fg = textColorForBackground(activeColor);
+    uint16_t bg = activeColor;
+    drawText("SSID:", 10, 104, fg, bg, 2, 5);
+    drawText(apSsid, 10, 122, fg, bg, 2, 18);
+
+    drawWiFiQr(apSsid);
   }
 
   void showWiFiConnected(const String &ip) {
@@ -272,6 +285,30 @@ class DisplayManager {
 
     drawText(line1, 10, 40, fg, bg, 3, 12);
     drawText(line2, 10, 84, fg, bg, 2, 18);
+  }
+
+  void drawWiFiQr(const String &ssid) {
+    String payload = "WIFI:T:nopass;S:" + ssid + ";;";
+
+    const uint8_t version = 6;
+    uint8_t qrcodeData[qrcode_getBufferSize(version)];
+    QRCode qrcode;
+    qrcode_initText(&qrcode, qrcodeData, version, ECC_LOW, payload.c_str());
+
+    int moduleCount = qrcode.size;
+    int scale = 4;
+    int qrSizePx = moduleCount * scale;
+    int originX = (240 - qrSizePx) / 2;  // centered horizontally
+    int originY = 148;                    // below all text labels
+
+    fillRect(originX - 2, originY - 2, qrSizePx + 4, qrSizePx + 4, 0xFFFF);
+
+    for (int y = 0; y < moduleCount; y++) {
+      for (int x = 0; x < moduleCount; x++) {
+        bool dark = qrcode_getModule(&qrcode, x, y);
+        fillRect(originX + (x * scale), originY + (y * scale), scale, scale, dark ? 0x0000 : 0xFFFF);
+      }
+    }
   }
 
   void prepPins() {
