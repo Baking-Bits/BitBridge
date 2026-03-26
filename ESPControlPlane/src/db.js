@@ -407,16 +407,27 @@ export async function listDevices() {
 
   const [rows] = await pool.query(`
     SELECT
-      id,
-      serial_number AS serialNumber,
-      device_group AS deviceGroup,
-      device_label AS deviceLabel,
-      firmware_version AS firmwareVersion,
-      app_type AS appType,
-      last_checkin AS lastCheckin,
-      created_at AS createdAt,
-      updated_at AS updatedAt
-    FROM devices
+      d.id,
+      d.serial_number AS serialNumber,
+      d.device_group AS deviceGroup,
+      d.device_label AS deviceLabel,
+      d.firmware_version AS firmwareVersion,
+      d.app_type AS appType,
+      d.last_checkin AS lastCheckin,
+      d.created_at AS createdAt,
+      d.updated_at AS updatedAt,
+      dc.status AS lastCheckinStatus,
+      dc.data AS lastCheckinData,
+      dc.created_at AS lastCheckinAt
+    FROM devices d
+    LEFT JOIN device_checkins dc
+      ON dc.id = (
+        SELECT dc2.id
+        FROM device_checkins dc2
+        WHERE dc2.device_id = d.id
+        ORDER BY dc2.created_at DESC, dc2.id DESC
+        LIMIT 1
+      )
     ORDER BY created_at DESC
   `);
 
@@ -436,17 +447,28 @@ export async function getDeviceById(deviceId) {
 
   const [rows] = await pool.execute(`
     SELECT
-      id,
-      serial_number AS serialNumber,
-      device_group AS deviceGroup,
-      device_label AS deviceLabel,
-      firmware_version AS firmwareVersion,
-      app_type AS appType,
-      last_checkin AS lastCheckin,
-      created_at AS createdAt,
-      updated_at AS updatedAt
-    FROM devices
-    WHERE id = ?
+      d.id,
+      d.serial_number AS serialNumber,
+      d.device_group AS deviceGroup,
+      d.device_label AS deviceLabel,
+      d.firmware_version AS firmwareVersion,
+      d.app_type AS appType,
+      d.last_checkin AS lastCheckin,
+      d.created_at AS createdAt,
+      d.updated_at AS updatedAt,
+      dc.status AS lastCheckinStatus,
+      dc.data AS lastCheckinData,
+      dc.created_at AS lastCheckinAt
+    FROM devices d
+    LEFT JOIN device_checkins dc
+      ON dc.id = (
+        SELECT dc2.id
+        FROM device_checkins dc2
+        WHERE dc2.device_id = d.id
+        ORDER BY dc2.created_at DESC, dc2.id DESC
+        LIMIT 1
+      )
+    WHERE d.id = ?
     LIMIT 1
   `, [normalizedId]);
 

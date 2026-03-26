@@ -328,10 +328,22 @@ void loop() {
     Serial.println("[Loop] Sending periodic check-in...");
 
     // Create custom data object
-    StaticJsonDocument<256> customData;
+    StaticJsonDocument<768> customData;
+    String selectedType = deviceConfig.selectedAppType.isEmpty() ? "system" : deviceConfig.selectedAppType;
+    unsigned long elapsedSinceCheckin = millis() - lastCheckinTime;
+    unsigned long remainingMs = (elapsedSinceCheckin >= checkinInterval) ? 0 : (checkinInterval - elapsedSinceCheckin);
+
     customData["signal_strength"] = wifiMgr.getRSSI();
     customData["uptime_seconds"] = (millis() - bootTime) / 1000;
     customData["loop_count"] = 0; // Can be incremented if needed
+    customData["runtime_mode"] = wasmHost.isLoaded() ? "wasm" : "native";
+    customData["wasm_loaded"] = wasmHost.isLoaded();
+    customData["wasm_cached"] = AppLoader::hasModule(selectedType);
+    customData["wasm_app_type"] = selectedType;
+    customData["wasm_app_version"] = deviceConfig.selectedAppVersion;
+    customData["wasm_module_url"] = deviceConfig.selectedAppModuleUrl;
+    customData["checkin_interval_sec"] = (int)(checkinInterval / 1000UL);
+    customData["next_checkin_sec"] = (int)(remainingMs / 1000UL);
 
     if (apiClient.sendCheckin("ok", &customData)) {
       Serial.println("[Loop] Check-in successful");

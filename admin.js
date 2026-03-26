@@ -160,6 +160,8 @@
     appTd.appendChild(badge);
     tr.appendChild(appTd);
 
+    tr.appendChild(createRuntimeCell(device));
+
     tr.appendChild(createCell(formatDate(device.lastCheckin)));
 
     // Delete button
@@ -209,6 +211,55 @@
       console.error("deleteDevice exception:", e);
       return false;
     }
+  }
+
+  function parseCheckinData(value) {
+    if (!value) return null;
+    if (typeof value === "object") return value;
+    if (typeof value === "string") {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  function createRuntimeCell(device) {
+    const td = document.createElement("td");
+    const data = parseCheckinData(device?.lastCheckinData);
+
+    if (!data) {
+      td.innerHTML = `<span class="text-muted small">No runtime data yet</span>`;
+      return td;
+    }
+
+    const wasmLoaded = Boolean(data.wasm_loaded);
+    const appType = String(data.wasm_app_type || device?.appType || "system");
+    const appVersion = String(data.wasm_app_version || "").trim();
+    const cached = data.wasm_cached === true;
+    const runtimeMode = String(data.runtime_mode || (wasmLoaded ? "wasm" : "native"));
+    const nextSec = Number(data.next_checkin_sec);
+
+    let line1 = "";
+    if (wasmLoaded) {
+      line1 = `WASM loaded (${escHtml(appType)}${appVersion ? " v" + escHtml(appVersion) : ""})`;
+    } else if (appType !== "system") {
+      line1 = `No image loaded for ${escHtml(appType)} (${cached ? "cached" : "not cached"})`;
+    } else {
+      line1 = "Native base mode (no Wasm loaded)";
+    }
+
+    const nextLabel = Number.isFinite(nextSec) && nextSec >= 0
+      ? `Next check-in ~${Math.max(0, Math.round(nextSec))}s`
+      : "Next check-in unknown";
+
+    td.innerHTML = `
+      <div class="small fw-semibold">${line1}</div>
+      <div class="small text-muted">mode=${escHtml(runtimeMode)} • ${nextLabel}</div>
+    `;
+    return td;
   }
 
   // ── App Module Registry ────────────────────────────────────────────────────
